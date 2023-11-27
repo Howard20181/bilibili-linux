@@ -1,5 +1,5 @@
 {
-    "appid": "io.github.msojocs.bilibili-bin",
+    "appid": "io.github.howard20181.bilibili-bin",
     "name": "BiliBili",
     "version": "BUILD_VERSION",
     "arch": ["amd64"],

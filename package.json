@@ -1,6 +1,6 @@
 {
-  "name": "bilibili-linux",
-  "version": "1.12.5-2",
+  "name": "bilibili-multiplatform",
+  "version": "1.12.5-3",
   "description": "bilibili client",
   "main": "index.js",
   "build": {
@@ -47,10 +47,10 @@
       "target": [
         "AppImage"
       ],
-      "maintainer": "msojocs <jiyecafe@gmail.com> (https://www.jysafe.cn)",
+      "maintainer": "Howard <HowardWu_20@outlook.com>",
       "icon": "res/icons",
-      "synopsis": "BiliBili client for Linux.",
-      "description": "BiliBili client for Linux with roaming.",
+      "synopsis": "BiliBili client multiplatform.",
+      "description": "BiliBili client multiplatform with roaming.",
       "category": "AudioVideo"
     }
   },
@@ -62,17 +62,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/msojocs/bilibili-linux.git"
+    "url": "git+https://github.com/Howard20181/bilibili-multiplatform.git"
   },
   "keywords": [
     "bilibili"
   ],
-  "author": "msojocs",
+  "author": "Howard",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/msojocs/bilibili-linux/issues"
+    "url": "https://github.com/Howard20181/bilibili-multiplatform/issues"
   },
-  "homepage": "https://github.com/msojocs/bilibili-linux#readme",
+  "homepage": "https://github.com/Howard20181/bilibili-multiplatform#readme",
   "devDependencies": {
     "electron": "^21.3.3",
     "electron-builder": "^23.6.0"

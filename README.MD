@@ -2,15 +2,12 @@
 
   <img src="./res/icons/bilibili.svg" height="100px" width="100px"/>
 
-  <h3>哔哩哔哩 Linux版</h3>
+  <h3>哔哩哔哩 多平台版</h3>
   <br>
 
 ----
 
-
-[![aur](https://img.shields.io/aur/version/bilibili-bin)](https://aur.archlinux.org/packages/bilibili-bin)
-
-  这是哔哩哔哩 Linux版
+  这是哔哩哔哩 多平台版
   
   SVG图标来自 [@Peternal](https://github.com/Peternal)
 
@@ -27,7 +24,7 @@
 
 本项目完全开源，且没有任何代码加密操作，如有疑虑请自行审查代码或停止使用相关文件。
 
-## 特点：
+## 特点
 
 1. 没有讨厌的标题栏
 2. 支持小分辨率屏幕全屏
@@ -43,27 +40,33 @@
 
 请到 Release 页面下载：
 
-https://github.com/msojocs/bilibili-linux/releases
+<https://github.com/Howard20181/bilibili-multiplatform/releases>
 
 即时构建版本：
 
-https://github.com/msojocs/bilibili-linux/releases/tag/continuous
+<https://github.com/Howard20181/bilibili-multiplatform/releases/tag/continuous>
 
 ### 手动构建
 
 1. 拉取代码
+
+   ```shell
+   git clone https://github.com/Howard20181/bilibili-multiplatform.git
+   cd bilibili-multiplatform
    ```
-   git clone https://github.com/msojocs/bilibili-linux.git
-   cd bilibili-linux
-   ```
+
 2. 安装
-   ```
+
+   ```shell
    tools/setup-bilibili
    ```
+
 3. 启动
-   ```
+
+   ```shell
    bin/bilibili
    ```
+
 ### AppImage 安装
 
 请使用 [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher)
@@ -75,7 +78,7 @@ https://github.com/msojocs/bilibili-linux/releases/tag/continuous
 ## Flag参数配置
 
 支持的参数列表：
-https://www.electronjs.org/docs/latest/api/command-line-switches
+<https://www.electronjs.org/docs/latest/api/command-line-switches>
 
 1. 创建 `flags` 文件
 
@@ -83,7 +86,7 @@ https://www.electronjs.org/docs/latest/api/command-line-switches
 
 2. 填写配置
 
-   ```
+   ```shell
    --disable-gpu
    --key=value
    ```
@@ -112,6 +115,7 @@ https://www.electronjs.org/docs/latest/api/command-line-switches
 
 1. [BiliRoaming](https://github.com/yujincheng08/BiliRoaming)
 2. [解除B站区域限制](https://github.com/ipcjs/bilibili-helper)
+3. [BiliBili Linux版](https://github.com/msojocs/bilibili-multiplatform)
 
 ## 免责声明
 
@@ -120,12 +124,3 @@ https://www.electronjs.org/docs/latest/api/command-line-switches
 本项目旨在交流学习之用，请使用者在下载后24小时内删除相关程序。
 
 对于使用本项目产生的额外问题，如账户封禁被盗等，维护者不对此负责，请谨慎使用；
-
-如有不当之处，请联系本人，邮箱：jiyecafe@gmail.com
-
-## 鸣谢
-
-> [IntelliJ IDEA](https://zh.wikipedia.org/zh-hans/IntelliJ_IDEA) 是一个在各个方面都最大程度地提高开发人员的生产力的 IDE，适用于 JVM 平台语言。
-
-特别感谢 [JetBrains](https://www.jetbrains.com/?from=bilibili-linux) 为开源项目提供免费的 [IntelliJ IDEA](https://www.jetbrains.com/idea/?from=bilibili-linux) 等 IDE 的授权  
-[<img src="https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.svg" width="200"/>](https://www.jetbrains.com/?from=bilibili-linux)
