@@ -211,14 +211,14 @@ class BiliBiliApi {
 
   async getSeasonInfoByEpSsIdOnBangumi(ep_id, season_id) {
     const res = await HTTP.get('//bangumi.bilibili.com/view/web_api/season?' + (ep_id != '' ? `ep_id=${ep_id}` : `season_id=${season_id}`))
-    return await Promise.resolve(JSON.parse(res.responseText))
+    return JSON.parse(res.responseText)
   }
 
   async getSeasonInfoByEpSsIdOnThailand(ep_id, season_id) {
     const params = '?' + (ep_id !== '' ? `ep_id=${ep_id}` : `season_id=${season_id}`) + `&mobi_app=bstar_a&s_locale=zh_SG`;
     const newParams = UTILS.generateMobiPlayUrlParams(params, 'th');
     const res = await HTTP.get(`//${this.server}/intl/gateway/v2/ogv/view/app/season?` + newParams)
-    return await Promise.resolve(JSON.parse(res.responseText || "{}"))
+    return JSON.parse(res.responseText || "{}")
   }
 
   async getSubtitleOnThailand(params) {
@@ -236,12 +236,12 @@ class BiliBiliApi {
         })
       }
     }
-    return await Promise.resolve(subtitles)
+    return subtitles
   }
 
   async getPlayURL(req, ak, area) {
     const res = await HTTP.get(`//${this.server}/pgc/player/web/playurl?${req._params}&access_key=${ak}&area=${area}`)
-    return await Promise.resolve(JSON.parse(res.responseText || "{}"))
+    return JSON.parse(res.responseText || "{}")
   }
 
   async getPlayURLApp(req, ak, area) {
@@ -271,7 +271,7 @@ class BiliBiliApi {
     }
     const queryParam = this.genSignParam(param)
     const res = await HTTP.get(`${url}?${queryParam}`)
-    return await Promise.resolve(JSON.parse(res.responseText || "{}"))
+    return JSON.parse(res.responseText || "{}")
   }
   async getPlayURLThailand(req, ak, area) {
     const params = `?${req._params}&mobi_app=bstar_a&s_locale=zh_SG`;
@@ -283,8 +283,8 @@ class BiliBiliApi {
     // const _params = UTILS._params2obj(req._params)
     // const responseText = UTILS.replaceUpos(res.responseText, uposMap[upos], isReplaceAkamai, 'th')
     let result = JSON.parse(res.responseText || "{}")
-    if (result.code !== 0) return Promise.reject(result)
-    return await Promise.resolve(UTILS.fixThailandPlayUrlJson(result))
+    if (result.code !== 0) throw new Error(result.code, result.message)
+    return UTILS.fixThailandPlayUrlJson(result)
   }
 
   searchBangumi(params, area) {
@@ -339,12 +339,12 @@ class BiliBiliApi {
       const resp = JSON.parse(res.responseText)
       log.log("searchBangumi: ", resp)
       if (area === "th")
-        return Promise.resolve(UTILS.handleTHSearchResult(resp.data.items || []))
+        return UTILS.handleTHSearchResult(resp.data.items || [])
 
       else
-        return Promise.resolve(resp.data?.result || [])
+        return resp.data?.result || []
     } catch (e) {
-      return Promise.resolve(e)
+      throw new Error(e)
     }
   }
 
@@ -359,9 +359,9 @@ class BiliBiliApi {
     const resp = JSON.parse(res.responseText)
     // log.log('dynamicDetail:', resp)
     if (resp.code === 0) {
-      return Promise.resolve(resp)
+      return resp
     }
-    return await Promise.reject(resp)
+    throw new Error(resp.code, resp.message)
   }
 
   /**
@@ -375,9 +375,9 @@ class BiliBiliApi {
     const resp = JSON.parse(res.responseText)
     // log.log('dynamicDetail:', resp)
     if (resp.code === 0) {
-      return Promise.resolve(resp)
+      return resp
     }
-    return await Promise.reject(resp)
+    throw new Error(resp.code, resp.message)
   }
 
   genDeviceId() {
@@ -432,7 +432,7 @@ class BiliBiliApi {
       return resp
     }
     else {
-      return Promise.reject(resp)
+      throw new Error(resp.code, resp.message)
     }
   }
 
@@ -478,7 +478,7 @@ class BiliBiliApi {
       return resp
     }
     else {
-      return Promise.reject(resp)
+      throw new Error(resp.code, resp.message)
     }
 
   }
@@ -694,7 +694,7 @@ const uposMap = {
   akamai: 'upos-hz-mirrorakam.akamaized.net',
 };
 const AREA_MARK_CACHE = {}
-let SEASON_CACHE = null
+let SEASON_STATUS_CACHE = {}
 // HOOK
 const URL_HOOK = {
 
@@ -734,14 +734,19 @@ const URL_HOOK = {
         seasonInfo.result.status = 13
         seasonInfo.result.total = seasonInfo.result.total_ep
         seasonInfo.result.type = 1
-        const user_status = SEASON_CACHE
-        seasonInfo.result['user_status'] = {
-          area_limit: user_status.area_limit,
-          ban_area_show: user_status.ban_area_show, follow: user_status.follow,
-          follow_status: user_status.follow_status, login: user_status.login,
-          pay: user_status.pay, pay_pack_paid: user_status.pay_pack_paid,
-          sponsor: user_status.sponsor,
+        const user_status = SEASON_STATUS_CACHE[params.season_id]
+        log.log('user_status: ', user_status)
+        if (user_status) {
+          log.log('add user_status')
+          seasonInfo.result['user_status'] = {
+            area_limit: user_status.area_limit,
+            ban_area_show: user_status.ban_area_show, follow: user_status.follow,
+            follow_status: user_status.follow_status, login: user_status.login,
+            pay: user_status.pay, pay_pack_paid: user_status.pay_pack_paid,
+            sponsor: user_status.sponsor,
+          }
         }
+
         log.log('seasonInfo1: ', seasonInfo)
         req.responseText = JSON.stringify(seasonInfo)
         return;
@@ -785,10 +790,19 @@ const URL_HOOK = {
   },
   "https://api.bilibili.com/pgc/view/web/season/user/status": async (req) => {
     // log.log("解除区域限制")
-    const resp = JSON.parse(req.responseText)
+    let resp = JSON.parse(req.responseText)
+    const params = UTILS._params2obj(req._params)
+    if (resp.result) {
+      if (resp.result.login === 0) {
+        UTILS.enableReferer()
+        const res = await HTTP.get(`https://api.bilibili.com/pgc/view/web/season/user/status?season_id=${params.season_id}&ts=${params.ts}`)
+        resp = JSON.parse(res.responseText)
+      }
+    }
     resp.result && (resp.result.area_limit = 0)
-    SEASON_CACHE = resp.result
+    SEASON_STATUS_CACHE[params.season_id] = resp.result
     req.responseText = JSON.stringify(resp)
+    log.log('season status: ', params.season_id, resp)
   },
   // "https://api.bilibili.com/pgc/season/episode/web/info": async (req) => {
   //   // log.log("解除区域限制")
@@ -814,9 +828,6 @@ const URL_HOOK = {
       const accessKey = UTILS.getAccessToken()
       log.info('serverList:', serverList)
 
-      // android，不要referer
-      UTILS.disableReferer()
-
       const api = new BiliBiliApi()
       if (serverList[AREA_MARK_CACHE[params.ep_id]] && serverList[AREA_MARK_CACHE[params.ep_id]].length > 0) {
         api.setServer(serverList[AREA_MARK_CACHE[params.ep_id]])
@@ -834,6 +845,8 @@ const URL_HOOK = {
           log.log('playURL:', playURL)
           // 从cache的区域中取到了播放链接
           req.responseText = UTILS.replaceUpos(JSON.stringify(playURL), uposMap[upos], isReplaceAkamai, AREA_MARK_CACHE[params.ep_id])
+          // android，不要referer
+          UTILS.disableReferer()
           return;
         }
       }
@@ -864,6 +877,8 @@ const URL_HOOK = {
         req.responseText = UTILS.replaceUpos(JSON.stringify(playURL), uposMap[upos], isReplaceAkamai, area)
         break
       }
+      // android，不要referer
+      UTILS.disableReferer()
     }
   },
 
