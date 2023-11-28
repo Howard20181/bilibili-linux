@@ -19,6 +19,7 @@ const HTTP = {
           Http.setRequestHeader(key, headers[key])
         }
       }
+      UTILS.enableReferer()
       Http.send()
       Http.onloadend = e => {
         resolve(Http)
@@ -43,6 +44,7 @@ const HTTP = {
           Http.setRequestHeader(key, headers[key])
         }
       }
+      UTILS.enableReferer()
       Http.send(body)
       Http.onloadend = e => {
         resolve(Http)
@@ -704,7 +706,6 @@ const URL_HOOK = {
    * @returns {Promise<void>}
    */
   "https://api.bilibili.com/pgc/view/pc/season": async (req) => {
-    UTILS.enableReferer();
     log.log('HOOK', req)
     const resp = JSON.parse(req.responseText || "{}")
     log.log('season info resp: ', req.responseText)
@@ -716,6 +717,8 @@ const URL_HOOK = {
       let seasonInfo = null;
       const params = UTILS._params2obj(req._params)
       seasonInfo = await api.getSeasonInfoByEpSsIdOnBangumi(params.ep_id || "", params.season_id || "")
+      const user_status = SEASON_STATUS_CACHE[params.season_id]
+      log.log('user_status: ', user_status)
       if (seasonInfo.code === 0) {
         // title id
         seasonInfo.result.episodes.forEach(ep => {
@@ -727,15 +730,13 @@ const URL_HOOK = {
         })
         seasonInfo.result.new_ep = seasonInfo.result.newest_ep
         seasonInfo.result.status = seasonInfo.result.status || 2
-        seasonInfo.result.user_status && (seasonInfo.result.user_status.login = seasonInfo.result.user_status?.login || 1)
         // 处理部分番剧存在平台限制
         seasonInfo.result.rights.watch_platform = 0
         seasonInfo.result.rights.allow_download = 1
         seasonInfo.result.status = 13
         seasonInfo.result.total = seasonInfo.result.total_ep
         seasonInfo.result.type = 1
-        const user_status = SEASON_STATUS_CACHE[params.season_id]
-        log.log('user_status: ', user_status)
+
         if (user_status) {
           log.log('add user_status', user_status)
           seasonInfo.result['user_status'] = {
@@ -772,13 +773,21 @@ const URL_HOOK = {
         ep.index_title = ep.long_title
       })
       seasonInfo.result.status = seasonInfo.result.status || 2
-      seasonInfo.result.user_status && (seasonInfo.result.user_status.login = seasonInfo.result.user_status?.login || 1)
+      if (user_status) {
+        log.log('add user_status', user_status)
+        seasonInfo.result['user_status'] = {
+          area_limit: user_status.area_limit,
+          ban_area_show: user_status.ban_area_show, follow: user_status.follow,
+          follow_status: user_status.follow_status, login: user_status.login,
+          pay: user_status.pay, pay_pack_paid: user_status.pay_pack_paid,
+          sponsor: user_status.sponsor,
+        }
+      }
       seasonInfo.result.rights.watch_platform = 0
       seasonInfo.result.rights.allow_download = 1
       seasonInfo.result.seasons = []
       log.log('seasonInfo2: ', seasonInfo)
       req.responseText = JSON.stringify(seasonInfo)
-      UTILS.disableReferer()
     } else {
       // 一些番剧可以获取到信息，但是内部有限制区域
       resp.result.episodes.forEach(ep => {
@@ -792,13 +801,13 @@ const URL_HOOK = {
     // log.log("解除区域限制")
     let resp = JSON.parse(req.responseText)
     const params = UTILS._params2obj(req._params)
-    if (resp.result) {
-      if (resp.result.login === 0) {
-        UTILS.enableReferer()
-        const res = await HTTP.get(`https://api.bilibili.com/pgc/view/web/season/user/status?season_id=${params.season_id}&ts=${params.ts}`)
-        resp = JSON.parse(res.responseText)
-      }
-    }
+    // if (resp.result) {
+    //   if (resp.result.login === 0) {
+    //     UTILS.enableReferer()
+    //     const res = await HTTP.get(`https://api.bilibili.com/pgc/view/web/season/user/status?season_id=${params.season_id}&ts=${params.ts}`)
+    //     resp = JSON.parse(res.responseText)
+    //   }
+    // }
     resp.result && (resp.result.area_limit = 0)
     SEASON_STATUS_CACHE[params.season_id] = resp.result
     req.responseText = JSON.stringify(resp)
@@ -815,12 +824,8 @@ const URL_HOOK = {
    */
   "//api.bilibili.com/pgc/player/web/playurl": async (req) => {
     const resp = JSON.parse(req.responseText)
-
-    // 默认pc，要referer
-    UTILS.enableReferer()
-
     if (resp.code !== 0) {
-      log.warn('[player]: 播放链接获取出现问题: ', resp.message)
+      log.warn('[player]: 播放链接获取出现问题:', resp.message)
       const params = UTILS._params2obj(req._params)
       const serverList = JSON.parse(localStorage.serverList || "{}")
       const upos = localStorage.upos || ""
@@ -841,17 +846,28 @@ const URL_HOOK = {
           const playURLNew = { code: playURL.code, message: "success", result: playURL }
           playURL = playURLNew
           // 从cache的区域中取到了播放链接
-          req.responseText = JSON.stringify(UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, AREA_MARK_CACHE[params.ep_id]))
-          log.log('playURL:', JSON.parse(req.responseText))
-          // android，不要referer
-          UTILS.disableReferer()
+          playURL = UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, AREA_MARK_CACHE[params.ep_id])
+          playURL.result.dash.video.forEach(v => {
+            v.base_url = UTILS.disableReferer(v.base_url)
+            v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+            if (v.baseUrl) v.baseUrl = v.base_url
+            if (v.backupUrl) v.backupUrl = v.backup_url
+          })
+          playURL.result.dash.audio.forEach(v => {
+            v.base_url = UTILS.disableReferer(v.base_url)
+            v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+            if (v.baseUrl) v.baseUrl = v.base_url
+            if (v.backupUrl) v.backupUrl = v.backup_url
+          })
+          log.log('playURL:', playURL)
+          req.responseText = JSON.stringify(playURL)
           return;
         }
       }
       // 没有从cache的区域中取到播放链接，遍历漫游服务器
       for (let area in serverList) {
         const server = serverList[area] || ""
-        log.log('getPlayURL from ', area, ' - ', server)
+        log.log('getPlayURL from', area, '-', server)
         if (server.length === 0) continue;
         api.setServer(server)
 
@@ -867,13 +883,32 @@ const URL_HOOK = {
         playURL = playURLNew
         // 解析成功
         AREA_MARK_CACHE[params.ep_id] = area
-        // req.responseText = JSON.stringify(playURL)
-        req.responseText = JSON.stringify(UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, area))
-        log.log('playURL:', JSON.parse(req.responseText))
+        playURL = UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, area)
+        playURL.result.dash.video.forEach(v => {
+          v.base_url = UTILS.disableReferer(v.base_url)
+          v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+          if (v.baseUrl) v.baseUrl = v.base_url
+          if (v.backupUrl) v.backupUrl = v.backup_url
+        })
+        playURL.result.dash.audio.forEach(v => {
+          v.base_url = UTILS.disableReferer(v.base_url)
+          v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+          if (v.baseUrl) v.baseUrl = v.base_url
+          if (v.backupUrl) v.backupUrl = v.backup_url
+        })
+        log.log('playURL:', playURL)
+        req.responseText = JSON.stringify(playURL)
         break
       }
-      // android，不要referer
-      UTILS.disableReferer()
+    } else if (resp.code == 0) {
+      resp.result.dash.video.forEach(v => {
+        UTILS.enableReferer(v.base_url)
+        v.backup_url.forEach(b => { UTILS.enableReferer(b) })
+      })
+      resp.result.dash.audio.forEach(v => {
+        UTILS.enableReferer(v.base_url)
+        v.backup_url.forEach(b => { UTILS.enableReferer(b) })
+      })
     }
   },
 
@@ -884,7 +919,7 @@ const URL_HOOK = {
    */
   "//api.bilibili.com/x/player/playurl": async (req) => {
     // 默认pc，要referer
-    UTILS.enableReferer()
+    // UTILS.enableReferer()
   },
 
   /**
@@ -1067,7 +1102,7 @@ const URL_HOOK = {
   zhHansSubtitle: async (req) => {
     // log.log('繁体转简体', req)
     if (req._params.includes('zh-Hans')) {
-      // log.log('繁体字幕数据: ', req.responseText)
+      // log.log('繁体字幕数据:', req.responseText)
       const tc2sc = window?.ChineseConversionAPI?.tc2sc
       if (!!tc2sc) {
         req.responseText = tc2sc(req.responseText)
@@ -1183,6 +1218,7 @@ const URL_HOOK_FETCH = {
 
 }
 
+let HOSTS_NO_REFER_MAP = []
 /*请求响应修改器1.0*/
 window.getHookXMLHttpRequest = (win) => {
   if (win.XMLHttpRequest.isHooked) {
@@ -1199,7 +1235,6 @@ window.getHookXMLHttpRequest = (win) => {
       this._status = 200
       this._responseText = ''
       this._response = null
-
       this._onreadystatechange = null;
       this._onloadend = null;
       this._onload = null;
@@ -1209,6 +1244,14 @@ window.getHookXMLHttpRequest = (win) => {
           this._onloadend();
         }
       };
+      this._setRequestHeader = (sName, sValue) => {
+        // log.log('set request header "%s" to "%s"', sName, sValue)
+        if (!this._headers) {
+          this._headers = {};
+        }
+        this._headers[sName] = sValue;
+        super.setRequestHeader(sName, sValue);
+      }
       super.onload = async () => {
         if (this._onload) {
           // log.log('onload', this._url)
@@ -1218,7 +1261,7 @@ window.getHookXMLHttpRequest = (win) => {
       };
       super.onreadystatechange = () => {
         log.log(...arguments)
-        if (this.readyState === 4 && this.status === 200) {
+        if (this.readyState === 4 /* DONE */ && this.status === 200) {
           // log.log('onreadystatechange', this, super.responseType)
           switch (super.responseType) {
             case 'text':
@@ -1256,22 +1299,50 @@ window.getHookXMLHttpRequest = (win) => {
               break;
           }
         }
+        if (this.readyState === 1 /* OPENED */) {
+          UTILS.enableReferer()
+          const url = this._url;
+          const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
+          if (HOSTS_NO_REFER_MAP.includes(host)) {
+            UTILS.disableReferer()
+          }
+        }
         // 用于arraybuffer等
         try {
-          if (super.responseType === 'arraybuffer')
-            this.response = super.response
+          if (super.responseType === 'arraybuffer') {
+            const response = super.response;
+            const url = this._url;
+            const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
+            if (this.readyState === 2 /* HEADERS_RECEIVED */) {
+              if (HOSTS_NO_REFER_MAP.includes(host)) {
+                log.log('onreadystatechange [HEADERS_RECEIVED]: should disableReferer:', host, 'url:', url, response.headers)
+                response.headers['access-control-allow-headers'] = '*'
+                response.headers['access-control-allow-origin'] = '*'
+                response.headers['access-control-expose-headers'] = '*'
+                response.headers['Access-Control-Allow-Credentials'] = '*'
+              }
+            }
+            this.response = response
+          }
         } catch (e) {
           console.error('响应体处理异常：', e)
         }
         try {
           if (this._onreadystatechange) {
             // debugger
-            if (this.readyState === 4 && URL_HOOK[this._url]) URL_HOOK[this._url](this).then(() => this._onreadystatechange())
-            else
-              this._onreadystatechange();
+            if (this.readyState === 1 /* OPENED */) {
+              UTILS.enableReferer()
+              const url = this._url;
+              const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
+              if (HOSTS_NO_REFER_MAP.includes(host)) {
+                UTILS.disableReferer()
+              }
+            }
+            if (this.readyState === 4 /* DONE */ && URL_HOOK[this._url]) URL_HOOK[this._url](this).then(() => this._onreadystatechange())
+            else this._onreadystatechange();
           }
         } catch (err) {
-          log.log('未处理的error: ', err)
+          log.log('未处理的error:', err)
         }
       };
     }
@@ -1296,27 +1367,23 @@ window.getHookXMLHttpRequest = (win) => {
     set status(v) {
       this._status = v
     }
-
+    setRequestHeader(sName, sValue) {
+      return this._setRequestHeader(sName, sValue)
+    }
     send() {
       const arr = [...arguments];
-      if (arr[0]) {
-        return super.send(...arr)
-      }
-      return super.send()
+      return super.send(...arr)
     }
 
     open() {
       const arr = [...arguments];
       const url = arr[1];
-      // log.log('request for: ', ...arr)
       if (url) {
         const [path, params] = url.split(/\?/);
         this._url = path;
         this._params = params;
       }
-      if (arr)
-        return super.open(...arr)
-      else return super.open()
+      return super.open(...arr)
     }
 
     /**
@@ -1420,13 +1487,16 @@ const UTILS = {
     const tokenInfo = JSON.parse(localStorage.bili_accessToken_hd || '{}')
     return tokenInfo.access_token
   },
-  enableReferer() {
+  enableReferer(url) {
+    if (url) {
+      const host = new URL(url).hostname
+      HOSTS_NO_REFER_MAP = HOSTS_NO_REFER_MAP.filter(item => item !== host)
+    }
     const referrerEle = document.getElementById('referrerMark')
     if (!referrerEle) return;
-
     referrerEle.content = "strict-origin-when-cross-origin"
   },
-  disableReferer() {
+  disableReferer(url) {
     const referrerEle = document.getElementById('referrerMark');
     if (!referrerEle) {
       let meta = document.createElement('meta')
@@ -1436,6 +1506,11 @@ const UTILS = {
       document.head.appendChild(meta);
     } else {
       referrerEle.content = "no-referrer"
+    }
+    if (url) {
+      const host = new URL(url).hostname
+      if (!HOSTS_NO_REFER_MAP.includes(host)) HOSTS_NO_REFER_MAP.push(host)
+      return url
     }
   },
   replaceUpos(playURL, host, replaceAkamai = false, area = "") {
@@ -1555,7 +1630,7 @@ const UTILS = {
       theRequest.fnval = '976'; // 强制 FLV
       theRequest.track_path = '0';
     }
-    theRequest.force_host = '2'; // 强制音视频返回 https
+    // theRequest.force_host = '2'; // 强制音视频返回 https
     theRequest.ts = `${~~(Date.now() / 1000)}`;
     // 所需参数数组
     let param_wanted = ['access_key', 'appkey', 'area', 'build', 'buvid', 'cid', 'device', 'ep_id', 'fnval', 'fnver', 'force_host', 'fourk', 'mobi_app', 'platform', 'qn', 's_locale', 'season_id', 'track_path', 'ts'];
@@ -1670,7 +1745,7 @@ const UTILS = {
 
       function getSegmentBase(url, id, range = '5000') {
         log.log('getSegmentBase', url, id, range)
-        UTILS.disableReferer()
+        url = UTILS.disableReferer(url)
         return new Promise((resolve, reject) => {
           // 从 window 中读取已有的值
           if (window.__segment_base_map__) {

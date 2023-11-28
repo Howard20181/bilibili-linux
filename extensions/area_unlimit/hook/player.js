@@ -258,7 +258,7 @@ const sleep = (ms) => {
         }
       });
       document.dispatchEvent(new CustomEvent('ROAMING_getURL', {
-        detail: 'PlayerEnhance' // Some variable from Gmail.
+        detail: 'PlayerEnhance'
       }));
     }
     let changeShow = ()=>{
