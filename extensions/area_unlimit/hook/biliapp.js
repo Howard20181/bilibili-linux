@@ -151,7 +151,7 @@ window.log = window.log || {
     // 获取漫游HTML
     log.log('获取漫游HTML')
     document.dispatchEvent(new CustomEvent('ROAMING_getURL', {
-      detail: 'RoamingPage' // Some variable from Gmail.
+      detail: 'RoamingPage'
     }));
   }
 

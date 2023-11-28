@@ -14,7 +14,7 @@ const getData = (name) => {
         reject(e)
     });
     document.dispatchEvent(new CustomEvent('ROAMING_getURL', {
-      detail: name // Some variable from Gmail.
+      detail: name
     }));
   })
 }

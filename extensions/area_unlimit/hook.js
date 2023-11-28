@@ -4,15 +4,15 @@ const fileName = url.pathname.substring(1).split('.')[0]
 console.log("[hook]: hook.js", fileName)
 const ext = chrome.extension
 const URLS = {
-  md5: chrome.extension.getURL(`utils/md5.js`),
-  login: chrome.extension.getURL(`hook/login.js`),
-  search: chrome.extension.getURL(`hook/search.js`),
-  player: chrome.extension.getURL(`hook/player.js`),
-  biliapp: chrome.extension.getURL(`hook/biliapp.js`),
-  commonJS: chrome.extension.getURL(`hook/common.js`),
-  commonCSS: chrome.extension.getURL(`hook/common.css`),
-  RoamingPage: chrome.extension.getURL(`hook/RoamingPage.html`),
-  PlayerEnhance: chrome.extension.getURL(`hook/PlayerEnhance.html`),
+  md5: chrome.runtime.getURL(`utils/md5.js`),
+  login: chrome.runtime.getURL(`hook/login.js`),
+  search: chrome.runtime.getURL(`hook/search.js`),
+  player: chrome.runtime.getURL(`hook/player.js`),
+  biliapp: chrome.runtime.getURL(`hook/biliapp.js`),
+  commonJS: chrome.runtime.getURL(`hook/common.js`),
+  commonCSS: chrome.runtime.getURL(`hook/common.css`),
+  RoamingPage: chrome.runtime.getURL(`hook/RoamingPage.html`),
+  PlayerEnhance: chrome.runtime.getURL(`hook/PlayerEnhance.html`),
 }
 
 var commonJS = document.createElement('script');
@@ -44,7 +44,7 @@ document.addEventListener('ROAMING_getURL', function (e) {
       break
   }
   document.dispatchEvent(new CustomEvent('ROAMING_sendURL', {
-    detail: data // Some variable from Gmail.
+    detail: data
   }));
 });
 

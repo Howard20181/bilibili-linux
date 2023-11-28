@@ -1,7 +1,7 @@
-const {protocol, session} = require('electron')
+const { protocol, session } = require('electron')
 const https = require('https');
-const HttpGet = (url, headers = {})=>{
-  return new Promise((resolve, reject)=>{
+const HttpGet = (url, headers = {}) => {
+  return new Promise((resolve, reject) => {
     const u = new URL(url)
     // console.log(u)
     const options = {
@@ -14,7 +14,7 @@ const HttpGet = (url, headers = {})=>{
     const result = []
     const req = https.request(options, res => {
       // console.log(`statusCode: ${res.statusCode}`);
-      res.on('end', ()=>{
+      res.on('end', () => {
         resolve(Buffer.concat(result).toString())
       })
       res.on('data', d => {
@@ -29,9 +29,8 @@ const HttpGet = (url, headers = {})=>{
     req.end();
   })
 }
-
 // HOOK
-const {app, BrowserWindow} = require('electron');
+const { app, BrowserWindow } = require('electron');
 const path = require("path");
 const { Module } = require("module")
 
@@ -44,7 +43,7 @@ const hookBrowserWindow = (OriginalBrowserWindow) => {
       if (options && options.webPreferences)
         options.webPreferences.devTools = true
       console.log('======HookedBrowserWindow:', options)
-    }catch(e) {
+    } catch (e) {
 
     }
     // 使用修改后的选项调用原始构造函数
@@ -84,10 +83,11 @@ Module._load = (...args) => {
 }
 
 const originloadURL = BrowserWindow.prototype.loadURL;
-BrowserWindow.prototype.loadURL = function(){
+BrowserWindow.prototype.loadURL = function () {
   this.setMinimumSize(300, 300);
   // 设置UA，有些番剧播放链接Windows会403
-  this.webContents.setUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) bilibili_pc/1.9.1 Chrome/98.0.4758.141 Electron/17.4.11 Safari/537.36')
+  if (process.platform)
+    this.webContents.setUserAgent(`Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) bilibili_pc/${app.getVersion()} Chrome/${process.versions.chrome} Electron/${process.versions.electron} Safari/537.36`)
   console.log('=====loadURL', arguments)
   // DevTools切换
   this.webContents.on("before-input-event", (event, input) => {
@@ -95,7 +95,7 @@ BrowserWindow.prototype.loadURL = function(){
       this.webContents.toggleDevTools();
     }
   });
-  if(arguments[0].includes('player.html') || arguments[0].includes('index.html')){
+  if (arguments[0].includes('player.html') || arguments[0].includes('index.html')) {
     // this.webContents.openDevTools()
     const extPath = path.join(path.dirname(app.getAppPath()), "extensions");
     console.log('----extPath----', extPath)
@@ -104,25 +104,25 @@ BrowserWindow.prototype.loadURL = function(){
       console.log('-----Load Extension:', id)
     })
     // 设置PAC代理脚本
-    this.webContents.on('ipc-message-sync', (event, ...args)=>{
-      if(args[0] === "config/roamingPAC"){
+    this.webContents.on('ipc-message-sync', (event, ...args) => {
+      if (args[0] === "config/roamingPAC") {
         console.log("receive config/roamingPAC: ", ...args)
         const ses = this.webContents.session
         ses.setProxy({
           mode: 'pac_script',
           pacScript: args[1]
-        }).then(res=>{
+        }).then(res => {
           console.log("====set proxy")
-          ses.forceReloadProxyConfig().then(()=>{
-            ses.resolveProxy("akamai.net").then(res=>{
+          ses.forceReloadProxyConfig().then(() => {
+            ses.resolveProxy("akamai.net").then(res => {
               console.log("resolveProxy akamai.net --> ", res)
-              event.returnValue = res.length === 0?'error':'ok'
-              if(res.length === 0)
-                ses.setProxy({mode:'system'})
+              event.returnValue = res.length === 0 ? 'error' : 'ok'
+              if (res.length === 0)
+                ses.setProxy({ mode: 'system' })
             })
 
           })
-        }).catch(err=>{
+        }).catch(err => {
           console.error("====set error", err)
           event.returnValue = 'error'
         })
@@ -134,7 +134,7 @@ BrowserWindow.prototype.loadURL = function(){
 
 // 从文件加载页面
 const _loadFile = BrowserWindow.prototype.loadFile;
-BrowserWindow.prototype.loadFile = function(...args){
+BrowserWindow.prototype.loadFile = function (...args) {
   console.log('=====loadFile:', ...args)
   // DevTools切换
   this.webContents.on("before-input-event", (event, input) => {
@@ -155,21 +155,17 @@ BrowserWindow.prototype.loadFile = function(...args){
   _loadFile.apply(this, args)
   // this.loadURL('http://www.jysafe.cn')
 }
-app.on('ready', ()=>{
+app.on('ready', () => {
   // const path = require('path');
   // const extPath = path.join(path.dirname(app.getAppPath()), "extensions");
-  // session.defaultSession.loadExtension(extPath + "/area_unlimit").then(({ id }) => {
-  //   // ...
-  //   console.log('-----Load Extension:', id)
-  // })
   // 自定义协议的具体实现
   protocol.registerStringProtocol('roaming', (req, cb) => {
     // console.log('registerHttpProtocol', req)
     HttpGet(req.url.replace('roaming', 'https'), {
       cookie: req.headers['x-cookie']
-    }).then(res=>{
+    }).then(res => {
       cb(res)
-    }).catch(err=>{
+    }).catch(err => {
       cb({
         statusCode: 500,
         data: JSON.stringify(err)
