@@ -1223,6 +1223,29 @@ window.getHookXMLHttpRequest = (win) => {
             UTILS.disableReferer()
           }
         }
+        log.log(...arguments)
+        if (this.readyState === 4 /* DONE */ && this.status === 200) {
+          // log.log('onreadystatechange', this, super.responseType)
+          switch (super.responseType) {
+            case 'text':
+            case '': {
+              const responseText = super.responseText;
+              if (responseText) {
+                this.responseText = responseText
+              }
+            }
+              break;
+            case 'json': {
+              const response = super.response;
+              if (response) {
+                this.response = response
+              }
+            }
+              break;
+            default:
+              break;
+          }
+        }
         // 用于arraybuffer等
         try {
           if (super.responseType === 'arraybuffer') {
