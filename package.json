@@ -1,6 +1,6 @@
 {
   "name": "bilibili-multiplatform",
-  "version": "1.12.5-3",
+  "version": "1.12.5-4",
   "description": "bilibili client",
   "main": "index.js",
   "build": {
@@ -21,7 +21,7 @@
       "extensions",
       "app/app-update.yml"
     ],
-    "electronVersion": "21.3.3",
+    "electronVersion": "27.1.2",
     "appId": "com.bilibili.app",
     "mac": {
       "target": [
@@ -74,7 +74,7 @@
   },
   "homepage": "https://github.com/Howard20181/bilibili-multiplatform#readme",
   "devDependencies": {
-    "electron": "^21.3.3",
-    "electron-builder": "^23.6.0"
+    "electron": "^27.1.2",
+    "electron-builder": "^24.9.1"
   }
 }

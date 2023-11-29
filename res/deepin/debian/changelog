@@ -1,6 +1,6 @@
 io.github.howard20181.bilibili (BUILD_VERSION) unstable; urgency=medium
  
   * update:
-    - bilibili 1.12.5
+    - bugfix
 
- -- Howard <HowardWu_20@outlook.com>  Mon, 27 Nov 2023 20:41:40 +0800
+ -- Howard <HowardWu_20@outlook.com>  Thu, 30 Nov 2023 04:16:16 +0800

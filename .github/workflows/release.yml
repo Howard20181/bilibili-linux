@@ -99,7 +99,7 @@ jobs:
       - name: Prepare
         run: |
           sudo npm install electron/asar -g
-          npm install
+          npm ci
           echo "$UID, $GID"
 
       - name: Generate TAG
@@ -151,7 +151,7 @@ jobs:
       - name: Prepare
         run: |
           npm install electron/asar -g
-          npm install
+          npm ci
 
       - name: Generate TAG
         id: Tag
