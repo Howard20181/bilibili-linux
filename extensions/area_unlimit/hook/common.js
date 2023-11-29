@@ -19,7 +19,6 @@ const HTTP = {
           Http.setRequestHeader(key, headers[key])
         }
       }
-      UTILS.enableReferer()
       Http.send()
       Http.onloadend = e => {
         resolve(Http)
@@ -44,7 +43,6 @@ const HTTP = {
           Http.setRequestHeader(key, headers[key])
         }
       }
-      UTILS.enableReferer()
       Http.send(body)
       Http.onloadend = e => {
         resolve(Http)
@@ -158,7 +156,7 @@ function getScript(url, callback) {
   script.type = "text/javascript"; // 定义script元素的类型(可省略)
   if (typeof (callback) != "undefined") { // 判断是否使用回调方法(第二个参数)
     if (script.readyState) {// js状态
-      log.log(script.onreadystatechange); // onreadystatechange：js状态改变时执行下方函数
+      // log.log(script.onreadystatechange); // onreadystatechange：js状态改变时执行下方函数
       script.onreadystatechange = function () {
         if (script.readyState == "loaded" || script.readyState == "complete") { // loaded：是否下载完成 complete：js执行完毕
           script.onreadystatechange = null;
@@ -253,7 +251,7 @@ class BiliBiliApi {
       const t = _pp.split('=')
       p[t[0]] = t[1]
     }
-    log.log('origin param:', p)
+    // log.log('origin param:', p)
     const url = `https://${this.server}/pgc/player/api/playurl`
     const param = {
       access_key: ak,
@@ -280,10 +278,6 @@ class BiliBiliApi {
     const newParams = UTILS.generateMobiPlayUrlParams(params, 'th');
     const res = await HTTP.get(`//${this.server}/intl/gateway/v2/ogv/playurl?${newParams}`)
     // 参考：哔哩漫游 油猴插件
-    // const upos = localStorage.upos||""
-    // const isReplaceAkamai = localStorage.replaceAkamai === "true"
-    // const _params = UTILS._params2obj(req._params)
-    // const responseText = UTILS.replaceUpos(res.responseText, uposMap[upos], isReplaceAkamai, 'th')
     let result = JSON.parse(res.responseText || "{}")
     if (result.code !== 0) throw new Error(result.code, result.message)
     return UTILS.fixThailandPlayUrlJson(result)
@@ -299,11 +293,6 @@ class BiliBiliApi {
       }
       if (area === 'th') {
         path = "intl/gateway/v2/app/search/type"
-        // let a = 'area=th'
-        // for (let k in params) {
-        //   a += `&${k}=${params[k]}`
-        // }
-        // params = a
       }
       params = UTILS.genSearchParam(params, area)
       const url = `https://${this.server}/${path}?${params}`
@@ -311,7 +300,7 @@ class BiliBiliApi {
         try {
 
           const resp = JSON.parse(res.responseText)
-          log.log("searchBangumi: ", resp)
+          // log.log("searchBangumi: ", resp)
           if (area === "th")
             resolve(UTILS.handleTHSearchResult(resp.data?.items || []))
           else {
@@ -334,15 +323,13 @@ class BiliBiliApi {
     const url = `roaming://${this.server}/${path}?${params}&area=${area}${area === "th" ? '&type=7' : ''}`
 
     const res = await HTTP.get(url, { 'x-cookie': `buvid3=${buvid3}` })
-    log.log('search result:', res)
-    log.log(res.responseText)
+    // log.log('search result:', res)
+    // log.log(res.responseText)
     try {
-
       const resp = JSON.parse(res.responseText)
       log.log("searchBangumi: ", resp)
       if (area === "th")
         return UTILS.handleTHSearchResult(resp.data.items || [])
-
       else
         return resp.data?.result || []
     } catch (e) {
@@ -397,7 +384,6 @@ class BiliBiliApi {
    */
   async HD_getLoginQrCode() {
     const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code'
-    // const url = 'https://passport.snm0516.aisee.tv/x/passport-tv-login/qrcode/auth_code'
     const deviceId = this.genDeviceId()
     const buvid = deviceId + deviceId.substring(0, 5)
     const param = {
@@ -708,7 +694,7 @@ const URL_HOOK = {
   "https://api.bilibili.com/pgc/view/pc/season": async (req) => {
     log.log('HOOK', req)
     const resp = JSON.parse(req.responseText || "{}")
-    log.log('season info resp: ', req.responseText)
+    // log.log('season info resp: ', req.responseText)
     if (resp.code !== 0) {
       // 状态码异常
       const api = new BiliBiliApi()
@@ -718,7 +704,6 @@ const URL_HOOK = {
       const params = UTILS._params2obj(req._params)
       seasonInfo = await api.getSeasonInfoByEpSsIdOnBangumi(params.ep_id || "", params.season_id || "")
       const user_status = SEASON_STATUS_CACHE[params.season_id]
-      log.log('user_status: ', user_status)
       if (seasonInfo.code === 0) {
         // title id
         seasonInfo.result.episodes.forEach(ep => {
@@ -738,7 +723,6 @@ const URL_HOOK = {
         seasonInfo.result.type = 1
 
         if (user_status) {
-          log.log('add user_status', user_status)
           seasonInfo.result['user_status'] = {
             area_limit: user_status.area_limit,
             ban_area_show: user_status.ban_area_show, follow: user_status.follow,
@@ -774,7 +758,6 @@ const URL_HOOK = {
       })
       seasonInfo.result.status = seasonInfo.result.status || 2
       if (user_status) {
-        log.log('add user_status', user_status)
         seasonInfo.result['user_status'] = {
           area_limit: user_status.area_limit,
           ban_area_show: user_status.ban_area_show, follow: user_status.follow,
@@ -801,21 +784,11 @@ const URL_HOOK = {
     // log.log("解除区域限制")
     let resp = JSON.parse(req.responseText)
     const params = UTILS._params2obj(req._params)
-    // if (resp.result) {
-    //   if (resp.result.login === 0) {
-    //     UTILS.enableReferer()
-    //     const res = await HTTP.get(`https://api.bilibili.com/pgc/view/web/season/user/status?season_id=${params.season_id}&ts=${params.ts}`)
-    //     resp = JSON.parse(res.responseText)
-    //   }
-    // }
     resp.result && (resp.result.area_limit = 0)
     SEASON_STATUS_CACHE[params.season_id] = resp.result
     req.responseText = JSON.stringify(resp)
-    log.log('season status: season_id=', params.season_id, req.responseText)
+    // log.log('season status: season_id=', params.season_id, req.responseText)
   },
-  // "https://api.bilibili.com/pgc/season/episode/web/info": async (req) => {
-  //   // log.log("解除区域限制")
-  // },
 
   /**
    * 获取播放链接
@@ -877,7 +850,7 @@ const URL_HOOK = {
         } else {
           playURL = await api.getPlayURLThailand(req, accessKey || "", area)
         }
-        log.log("已获取播放链接", playURL)
+        // log.log("已获取播放链接", playURL)
         if (playURL.code !== 0) continue
         const playURLNew = { code: playURL.code, message: "success", result: playURL }
         playURL = playURLNew
@@ -910,16 +883,6 @@ const URL_HOOK = {
         v.backup_url.forEach(b => { UTILS.enableReferer(b) })
       })
     }
-  },
-
-  /**
-   * 获取播放链接
-   * @param {XMLHttpRequest} req 原请求结果
-   * @returns {Promise<void>}
-   */
-  "//api.bilibili.com/x/player/playurl": async (req) => {
-    // 默认pc，要referer
-    // UTILS.enableReferer()
   },
 
   /**
@@ -1197,7 +1160,7 @@ const URL_HOOK_FETCH = {
         const detail = await bili.getDynamicDetail(b2d.dynamic_id)
         // 构造数据
         const res = await UTILS.genVideoDetailByDynamicDetail(detail.data)
-        log.log('res:', res)
+        // log.log('res:', res)
         data.res.data = {
           code: 0,
           message: '',
@@ -1244,14 +1207,6 @@ window.getHookXMLHttpRequest = (win) => {
           this._onloadend();
         }
       };
-      this._setRequestHeader = (sName, sValue) => {
-        // log.log('set request header "%s" to "%s"', sName, sValue)
-        if (!this._headers) {
-          this._headers = {};
-        }
-        this._headers[sName] = sValue;
-        super.setRequestHeader(sName, sValue);
-      }
       super.onload = async () => {
         if (this._onload) {
           // log.log('onload', this._url)
@@ -1260,45 +1215,6 @@ window.getHookXMLHttpRequest = (win) => {
         }
       };
       super.onreadystatechange = () => {
-        log.log(...arguments)
-        if (this.readyState === 4 /* DONE */ && this.status === 200) {
-          // log.log('onreadystatechange', this, super.responseType)
-          switch (super.responseType) {
-            case 'text':
-            case '': {
-              const responseText = super.responseText;
-              if (responseText) {
-                //   log.log(responseText)
-                //   const res = null;
-                //   if (res !== null) {
-                //     this.responseText = res
-                //   } else {
-                //     this.responseText = super.responseText
-                //   }
-                // } else {
-                this.responseText = responseText
-              }
-            }
-              break;
-            case 'json': {
-              const response = super.response;
-              if (response) {
-                //   const res = null;
-                //   if (res !== null) {
-                //     this.response = res
-                //   } else {
-                //     this.response = super.response
-                //   }
-                // } else {
-                this.response = response
-              }
-            }
-              break;
-            default:
-              // console.warn('unsupported type:', super.responseType)
-              break;
-          }
-        }
         if (this.readyState === 1 /* OPENED */) {
           UTILS.enableReferer()
           const url = this._url;
@@ -1315,7 +1231,7 @@ window.getHookXMLHttpRequest = (win) => {
             const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
             if (this.readyState === 2 /* HEADERS_RECEIVED */) {
               if (HOSTS_NO_REFER_MAP.includes(host)) {
-                log.log('onreadystatechange [HEADERS_RECEIVED]: should disableReferer:', host, 'url:', url, response.headers)
+                // log.log('onreadystatechange [HEADERS_RECEIVED]: should disableReferer:', host, 'url:', url, response.headers)
                 response.headers['access-control-allow-headers'] = '*'
                 response.headers['access-control-allow-origin'] = '*'
                 response.headers['access-control-expose-headers'] = '*'
@@ -1330,14 +1246,6 @@ window.getHookXMLHttpRequest = (win) => {
         try {
           if (this._onreadystatechange) {
             // debugger
-            if (this.readyState === 1 /* OPENED */) {
-              UTILS.enableReferer()
-              const url = this._url;
-              const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
-              if (HOSTS_NO_REFER_MAP.includes(host)) {
-                UTILS.disableReferer()
-              }
-            }
             if (this.readyState === 4 /* DONE */ && URL_HOOK[this._url]) URL_HOOK[this._url](this).then(() => this._onreadystatechange())
             else this._onreadystatechange();
           }
@@ -1366,9 +1274,6 @@ window.getHookXMLHttpRequest = (win) => {
     }
     set status(v) {
       this._status = v
-    }
-    setRequestHeader(sName, sValue) {
-      return this._setRequestHeader(sName, sValue)
     }
     send() {
       const arr = [...arguments];
@@ -1415,11 +1320,11 @@ window.getHookXMLHttpRequest = (win) => {
 const originalFetch = window.fetch
 if (fetch.toString().includes('[native code]')) {
   window.fetch = async (url, config) => {
-    log.log('fetch:', url, config)
+    // log.log('fetch:', url, config)
     const res = await originalFetch(url, config)
     // const u = new URL(url.startsWith('//') ? `https:${url}` : url)
     // log.log('u.pathname:', u.pathname)
-    log.log('res:', res)
+    // log.log('res:', res)
     const [path, params] = url.split(/\?/);
     if (URL_HOOK_FETCH[path]) {
       // debugger
@@ -1528,7 +1433,7 @@ const UTILS = {
     return playURL
   },
   handleTHSearchResult(itemList) {
-    log.log('th:', itemList)
+    // log.log('th:', itemList)
     const result = []
     for (let item of itemList) {
       result.push({
@@ -1744,7 +1649,7 @@ const UTILS = {
       }
 
       function getSegmentBase(url, id, range = '5000') {
-        log.log('getSegmentBase', url, id, range)
+        // log.log('getSegmentBase', url, id, range)
         url = UTILS.disableReferer(url)
         return new Promise((resolve, reject) => {
           // 从 window 中读取已有的值
@@ -1773,7 +1678,7 @@ const UTILS = {
               window.__segment_base_map__ = {};
               window.__segment_base_map__[id] = result;
             }
-            // log.log('get SegmentBase ', result, 'id=', id);
+            log.log('get SegmentBase ', result, 'id=', id);
             resolve(result);
           };
           xhr.send(null); // 发送请求
@@ -2034,4 +1939,3 @@ const UTILS = {
     return res
   }
 }
-
