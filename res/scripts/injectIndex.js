@@ -1,5 +1,6 @@
-const {app} = require('electron');
+const { app } = require('electron');
 const fs = require('fs')
+app.commandLine.appendSwitch('disable-features', 'WidgetLayering');
 try {
   const userDataPath = app.getPath("userData")
   const flagPath = `${userDataPath}/bilibili-flags.conf`
@@ -15,7 +16,7 @@ try {
       if (kv.length > 1) {
         console.log('append flag:', `${kv[0]}=${kv[1]}`)
         app.commandLine.appendSwitch(kv[0], kv[1])
-      }else {
+      } else {
         console.log('append flag:', kv[0])
         app.commandLine.appendArgument(kv[0])
       }
