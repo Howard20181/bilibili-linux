@@ -1,6 +1,6 @@
 {
   "name": "bilibili-multiplatform",
-  "version": "1.12.5-3",
+  "version": "1.12.5-4",
   "description": "bilibili client",
   "main": "index.js",
   "build": {
