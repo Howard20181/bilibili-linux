@@ -1258,7 +1258,7 @@ window.getHookXMLHttpRequest = (win) => {
                 response.headers['access-control-allow-headers'] = '*'
                 response.headers['access-control-allow-origin'] = '*'
                 response.headers['access-control-expose-headers'] = '*'
-                response.headers['Access-Control-Allow-Credentials'] = '*'
+                response.headers['Access-Control-Allow-Credentials'] = 'true'
               }
             }
             this.response = response
