@@ -732,7 +732,7 @@ const URL_HOOK = {
           }
         }
 
-        log.log('seasonInfo1: ', seasonInfo)
+        log.log('seasonInfo from 主站: ', seasonInfo)
         req.responseText = JSON.stringify(seasonInfo)
         return;
       }
@@ -740,36 +740,56 @@ const URL_HOOK = {
       let server = serverList['th'] || ""
       if (server.length === 0) return;
       api.setServer(server)
+      log.log('去th找 seasonInfo: params:', params)
       seasonInfo = await api.getSeasonInfoByEpSsIdOnThailand(params.ep_id || "", params.season_id || "")
-      log.log('去th找:', seasonInfo)
       if (seasonInfo.code !== 0 || seasonInfo.result.modules.length === 0) return;
       AREA_MARK_CACHE[params.ep_id] = 'th'
-      seasonInfo.result.episodes = seasonInfo.result.episodes || seasonInfo.result.modules[0].data.episodes
-      delete seasonInfo.result.modules
-      // title id
-      seasonInfo.result.episodes.forEach(ep => {
-        ep.title = ep.title || `${ep.index}`
-        ep.id = ep.id || ep.ep_id
-        ep.ep_id = ep.ep_id || ep.id
-        ep.episode_type = 0
-        ep.status = 2
-        ep.duration = ep.duration || 0
-        ep.index_title = ep.long_title
-      })
-      seasonInfo.result.status = seasonInfo.result.status || 2
-      if (user_status) {
-        seasonInfo.result['user_status'] = {
-          area_limit: user_status.area_limit,
-          ban_area_show: user_status.ban_area_show, follow: user_status.follow,
-          follow_status: user_status.follow_status, login: user_status.login,
-          pay: user_status.pay, pay_pack_paid: user_status.pay_pack_paid,
-          sponsor: user_status.sponsor,
+      let episodes = []
+      seasonInfo.result.user_status.follow = 1
+
+      seasonInfo.result.modules.forEach((module, mid) => {
+        if (module.data) {
+          let sid = module.id ? module.id : mid + 1
+          module.data.episodes.forEach((ep, eid) => {
+            if (ep.status === 13) {
+              ep['badge'] = '会员'
+              ep['badge_info'] = { bg_color: '#FB7299', bg_color_night: '#BB5B76', text: '会员' }
+            }
+            ep.status = 2
+            ep['episode_status'] = ep.status
+            ep['ep_id'] = ep.id
+            ep.index = ep.title
+            ep.link = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
+            ep.indexTitle = ep.long_title_display
+            ep.index_title = ep.long_title_display
+            ep.long_title = ep.long_title_display
+            ep['ep_index'] = eid + 1
+            ep['selection_index'] = sid + 1
+            ep['rights'] = { allow_demand: 0, allow_dm: 0, allow_download: 0, area_limit: 0 }
+            if (!ep.cid || ep.cid === 0) ep['cid'] = ep.id
+            if (!ep.aid || ep.aid === 0) ep['aid'] = seasonInfo.result.season_id
+            episodes.push(ep)
+          })
+          module.data['id'] = sid
         }
-      }
-      seasonInfo.result.rights.watch_platform = 0
-      seasonInfo.result.rights.allow_download = 1
-      seasonInfo.result.seasons = []
-      log.log('seasonInfo2: ', seasonInfo)
+      })
+      seasonInfo.result['episodes'] = episodes
+      let style = []
+      seasonInfo.result.styles.forEach(i => {
+        style.push(i.name)
+      })
+      seasonInfo.result['style'] = style
+      seasonInfo.result.rights['watch_platform'] = 0
+      seasonInfo.result.rights['allow_comment'] = 0
+      seasonInfo.result.actors = seasonInfo.result.actor.info
+      seasonInfo.result['is_paster_ads'] = 0
+      seasonInfo.result['jp_title'] = seasonInfo.result.origin_name
+      seasonInfo.result['newest_ep'] = seasonInfo.result.new_ep
+      seasonInfo.result.status = 2
+      seasonInfo.result['season_status'] = seasonInfo.result.status
+      seasonInfo.result['season_title'] = seasonInfo.result.title
+      seasonInfo.result['total_ep'] = episodes.length
+      log.log('seasonInfo from th: ', seasonInfo)
       req.responseText = JSON.stringify(seasonInfo)
     } else {
       // 一些番剧可以获取到信息，但是内部有限制区域
@@ -786,6 +806,7 @@ const URL_HOOK = {
     const params = UTILS._params2obj(req._params)
     resp.result && (resp.result.area_limit = 0)
     SEASON_STATUS_CACHE[params.season_id] = resp.result
+    log.log('user_status', params, resp.result)
     req.responseText = JSON.stringify(resp)
     // log.log('season status: season_id=', params.season_id, req.responseText)
   },
@@ -1182,6 +1203,11 @@ const URL_HOOK_FETCH = {
 }
 
 let HOSTS_NO_REFER_MAP = []
+let meta = document.createElement('meta')
+meta.id = "referrerMark"
+meta.name = "referrer"
+document.head.appendChild(meta);
+const referrerEle = document.getElementById('referrerMark');
 /*请求响应修改器1.0*/
 window.getHookXMLHttpRequest = (win) => {
   if (win.XMLHttpRequest.isHooked) {
@@ -1216,11 +1242,11 @@ window.getHookXMLHttpRequest = (win) => {
       };
       super.onreadystatechange = () => {
         if (this.readyState === 1 /* OPENED */) {
-          UTILS.enableReferer()
+          referrerEle.content = "strict-origin-when-cross-origin"
           const url = this._url;
           const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
           if (HOSTS_NO_REFER_MAP.includes(host)) {
-            UTILS.disableReferer()
+            referrerEle.content = "no-referrer"
           }
         }
         log.log(...arguments)
@@ -1420,21 +1446,8 @@ const UTILS = {
       const host = new URL(url).hostname
       HOSTS_NO_REFER_MAP = HOSTS_NO_REFER_MAP.filter(item => item !== host)
     }
-    const referrerEle = document.getElementById('referrerMark')
-    if (!referrerEle) return;
-    referrerEle.content = "strict-origin-when-cross-origin"
   },
   disableReferer(url) {
-    const referrerEle = document.getElementById('referrerMark');
-    if (!referrerEle) {
-      let meta = document.createElement('meta')
-      meta.id = "referrerMark"
-      meta.name = "referrer"
-      meta.content = "no-referrer"
-      document.head.appendChild(meta);
-    } else {
-      referrerEle.content = "no-referrer"
-    }
     if (url) {
       const host = new URL(url).hostname
       if (!HOSTS_NO_REFER_MAP.includes(host)) HOSTS_NO_REFER_MAP.push(host)
@@ -1558,7 +1571,7 @@ const UTILS = {
       theRequest.fnval = '976'; // 强制 FLV
       theRequest.track_path = '0';
     }
-    // theRequest.force_host = '2'; // 强制音视频返回 https
+    theRequest.force_host = '2'; // 强制音视频返回 https
     theRequest.ts = `${~~(Date.now() / 1000)}`;
     // 所需参数数组
     let param_wanted = ['access_key', 'appkey', 'area', 'build', 'buvid', 'cid', 'device', 'ep_id', 'fnval', 'fnver', 'force_host', 'fourk', 'mobi_app', 'platform', 'qn', 's_locale', 'season_id', 'track_path', 'ts'];
@@ -1845,14 +1858,13 @@ const UTILS = {
       // 下面参数取自安达(ep359333)，总之一股脑塞进去（
       result['fnval'] = result.support_formats[0].quality;
       result['fnver'] = 0;
-      // result['vip_status'] = 1;
-      // result['vip_type'] = 2;
+      result['vip_status'] = 1;
+      result['vip_type'] = 2;
       result['seek_param'] = 'start';
       result['seek_type'] = 'offset';
       result['bp'] = 0;
       result['from'] = 'local';
-      // result['has_paid'] = false;
-      // return result;
+      result['has_paid'] = false;
       return UTILS.fixMobiPlayUrlJson(result);
     });
   },
