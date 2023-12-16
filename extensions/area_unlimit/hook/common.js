@@ -742,7 +742,12 @@ const URL_HOOK = {
       api.setServer(server)
       log.log('去th找 seasonInfo: params:', params)
       seasonInfo = await api.getSeasonInfoByEpSsIdOnThailand(params.ep_id || "", params.season_id || "")
-      if (seasonInfo.code !== 0 || seasonInfo.result.modules.length === 0) return;
+      if (seasonInfo.code !== 0 || seasonInfo.result.modules.length === 0) {
+        if (seasonInfo.code === 401)
+          log.log('获取番剧信息失败：', seasonInfo.message)
+        return;
+      }
+
       AREA_MARK_CACHE[params.ep_id] = 'th'
       let episodes = []
       seasonInfo.result.user_status.follow = 1
@@ -856,6 +861,9 @@ const URL_HOOK = {
           log.log('playURL:', playURL)
           req.responseText = JSON.stringify(playURL)
           return;
+        } else if (resp.code === 401) {
+          log.log('获取播放链接失败：', resp.message)
+          return
         }
       }
       // 没有从cache的区域中取到播放链接，遍历漫游服务器
@@ -872,7 +880,13 @@ const URL_HOOK = {
           playURL = await api.getPlayURLThailand(req, accessKey || "", area)
         }
         // log.log("已获取播放链接", playURL)
-        if (playURL.code !== 0) continue
+        if (playURL.code !== 0) {
+          if (playURL.code === 401) {
+            log.log('获取播放链接失败：', playURL.message)
+            return
+          }
+          continue
+        }
         const playURLNew = { code: playURL.code, message: "success", result: playURL }
         playURL = playURLNew
         // 解析成功
