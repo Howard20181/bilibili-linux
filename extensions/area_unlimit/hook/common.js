@@ -848,13 +848,13 @@ const URL_HOOK = {
           playURL = UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, AREA_MARK_CACHE[params.ep_id])
           playURL.result.dash.video.forEach(v => {
             v.base_url = UTILS.disableReferer(v.base_url)
-            v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+            if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
             if (v.baseUrl) v.baseUrl = v.base_url
             if (v.backupUrl) v.backupUrl = v.backup_url
           })
           playURL.result.dash.audio.forEach(v => {
             v.base_url = UTILS.disableReferer(v.base_url)
-            v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+            if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
             if (v.baseUrl) v.baseUrl = v.base_url
             if (v.backupUrl) v.backupUrl = v.backup_url
           })
@@ -894,13 +894,13 @@ const URL_HOOK = {
         playURL = UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, area)
         playURL.result.dash.video.forEach(v => {
           v.base_url = UTILS.disableReferer(v.base_url)
-          v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+          if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
           if (v.baseUrl) v.baseUrl = v.base_url
           if (v.backupUrl) v.backupUrl = v.backup_url
         })
         playURL.result.dash.audio.forEach(v => {
           v.base_url = UTILS.disableReferer(v.base_url)
-          v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+          if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
           if (v.baseUrl) v.baseUrl = v.base_url
           if (v.backupUrl) v.backupUrl = v.backup_url
         })
@@ -1472,12 +1472,16 @@ const UTILS = {
     log.log('replaceUpos:', host, replaceAkamai)
     if (host) {
       playURL.result.dash.video.forEach(v => {
-        if (!v.base_url.includes("akamaized.net") || replaceAkamai)
-          v.base_url = v.base_url.replace(/:\\?\/\\?\/[^\/]+\\?\//g, `://${host}/`);
+        if (!v.base_url.includes("akamaized.net") || replaceAkamai || area === "th") {
+          const url = new URL(v.base_url)
+          v.base_url = new URL(url.pathname + url.search, `https://${host}`).href
+        }
       })
       playURL.result.dash.audio.forEach(v => {
-        if (!v.base_url.includes("akamaized.net") || replaceAkamai)
-          v.base_url = v.base_url.replace(/:\\?\/\\?\/[^\/]+\\?\//g, `://${host}/`);
+        if (!v.base_url.includes("akamaized.net") || replaceAkamai || area === "th") {
+          const url = new URL(v.base_url)
+          v.base_url = new URL(url.pathname + url.search, `https://${host}`).href
+        }
       })
     }
     return playURL
@@ -1728,7 +1732,7 @@ const UTILS = {
               window.__segment_base_map__ = {};
               window.__segment_base_map__[id] = result;
             }
-            log.log('get SegmentBase ', result, 'id=', id);
+            log.log('get SegmentBase', result, 'id', id);
             resolve(result);
           };
           xhr.send(null); // 发送请求
@@ -1745,15 +1749,9 @@ const UTILS = {
       // let range = Math.round(result.dash.duration * 3.5).toString()
       // 乱猜 range 导致泡面番播不出
       result.dash.video.forEach((video) => {
-        if (video.backup_url.length > 0) {
-          video.base_url = video.backup_url[0];
-        }
         taskList.push(getSegmentBase(video.base_url, getId(video.base_url, '100050', true)));
       });
       result.dash.audio.forEach((audio) => {
-        if (audio.backup_url.length > 0) {
-          audio.base_url = audio.backup_url[0];
-        }
         taskList.push(getSegmentBase(audio.base_url, audio.id));
       });
       yield Promise.all(taskList);
@@ -1778,12 +1776,12 @@ const UTILS = {
           indexRange: segmentBaseMap[segmentBaseId][1]
         };
         video_id = video_id.replace('nb2-1-', '');
-        video.width = resolutionMap[video_id][0];
-        video.height = resolutionMap[video_id][1];
+        video.width = resolutionMap[video_id] ? resolutionMap[video_id][0] : 0;
+        video.height = resolutionMap[video_id] ? resolutionMap[video_id] : 0;
         video.mimeType = 'video/mp4';
         video.mime_type = 'video/mp4';
-        video.frameRate = frameRateMap[video_id];
-        video.frame_rate = frameRateMap[video_id];
+        video.frameRate = frameRateMap[video_id] ? frameRateMap[video_id] : 0;
+        video.frame_rate = frameRateMap[video_id] ? frameRateMap[video_id] : 0;
         video.sar = "1:1";
         video.startWithSAP = 1;
         video.start_with_sap = 1;
@@ -1842,8 +1840,22 @@ const UTILS = {
 
       // 填充音频流数据
       dash_audio.forEach((audio) => {
+        const base_url = audio.base_url
+        const url = new URL(base_url.startsWith('//') ? `https:${base_url}` : base_url)
+        const search = audio.backup_url ? new URL(audio.backup_url[0]).search : url.search
+        if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(url.hostname)) {
+          audio.base_url = new URL(url.pathname.replace(/\/v1\/resource\//g, '').replace(/\_/g, `\/`) + search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
+          log.log('replace ip upos', base_url, 'to host', audio.base_url)
+        } else if (url.hostname.includes("akamaized.net")) {
+          audio.base_url = new URL(url.pathname + search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
+        }
+        if (audio.backup_url) audio.backup_url = audio.backup_url.forEach(u => {
+          if (u.includes("akamaized.net")) {
+            const url = new URL(u)
+            u = new URL(url.pathname + url.search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
+          }
+        })
         log.log('填充音频流数据:', audio)
-        audio.backup_url = audio.backup_url.filter(e => !e.includes('akamaized.net'))
         dash['audio'].push(audio);
       });
 
@@ -1858,7 +1870,22 @@ const UTILS = {
           accept_quality.push(stream.stream_info.quality);
           accept_description.push(stream.stream_info.new_description);
           stream.dash_video.id = stream.stream_info.quality;
-          stream.dash_video.backup_url = stream.dash_video.backup_url.filter(e => !e.includes('akamaized.net'))
+          const base_url = stream.dash_video.base_url
+          const url = new URL(base_url.startsWith('//') ? `https:${base_url}` : base_url)
+          const search = stream.dash_video.backup_url ? new URL(stream.dash_video.backup_url[0]).search : url.search
+          if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(url.hostname)) {
+            stream.dash_video.base_url = new URL(url.pathname.replace(/\/v1\/resource\//g, '').replace(/\_/g, `\/`) + search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
+            log.log('replace ip upos', base_url, 'to host', stream.dash_video.base_url)
+          } else if (url.hostname.includes("akamaized.net")) {
+            stream.dash_video.base_url = new URL(url.pathname + search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
+          }
+          if (stream.dash_video.backup_url) stream.dash_video.backup_url = stream.dash_video.backup_url.forEach(u => {
+            if (u.includes("akamaized.net")) {
+              const url = new URL(u)
+              u = new URL(url.pathname + url.search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
+            }
+          })
+          log.log('填充视频流数据:', stream.dash_video)
           dash_video.push(stream.dash_video);
         }
       });
