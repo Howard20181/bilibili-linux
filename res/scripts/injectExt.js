@@ -86,7 +86,7 @@ const originloadURL = BrowserWindow.prototype.loadURL;
 BrowserWindow.prototype.loadURL = function () {
   this.setMinimumSize(300, 300);
   // 设置UA，有些番剧播放链接Windows会403
-  if (process.platform)
+  if (process.platform === 'win32')
     this.webContents.setUserAgent(`Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) bilibili_pc/${app.getVersion()} Chrome/${process.versions.chrome} Electron/${process.versions.electron} Safari/537.36`)
   console.log('=====loadURL', arguments)
   // DevTools切换
