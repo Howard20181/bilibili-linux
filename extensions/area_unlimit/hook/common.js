@@ -750,8 +750,16 @@ const URL_HOOK = {
 
       AREA_MARK_CACHE[params.ep_id] = 'th'
       let episodes = []
+      if (user_status) {
+        seasonInfo.result['user_status'] = {
+          area_limit: user_status.area_limit,
+          follow: user_status.follow,
+          login: user_status.login,
+          pay: seasonInfo.result.user_status.vip,
+          vip_info: user_status.vip_info
+        }
+      }
       seasonInfo.result.user_status.follow = 1
-
       seasonInfo.result.modules.forEach((module, mid) => {
         if (module.data) {
           let sid = module.id ? module.id : mid + 1
@@ -809,6 +817,13 @@ const URL_HOOK = {
     // log.log("解除区域限制")
     let resp = JSON.parse(req.responseText)
     const params = UTILS._params2obj(req._params)
+    if (resp.code !== 0) {
+      resp.message = "success"
+      if (resp.code === -404) {
+        resp.result = { login: 1, vip_info: { due_date: Date.now() + 86400000, status: 1, type: 2 } }
+      }
+      resp.code = 0
+    }
     resp.result && (resp.result.area_limit = 0)
     SEASON_STATUS_CACHE[params.season_id] = resp.result
     log.log('user_status', params, resp.result)
@@ -1042,8 +1057,8 @@ const URL_HOOK = {
     const resp = JSON.parse(req.responseText || "{}")
     const serverList = JSON.parse(localStorage.serverList || "{}")
     if ((resp.code === -400 || resp.code === -404 || resp.data.subtitle.subtitles.length === 0) && serverList.th) {
-      log.log('处理字幕')
-      // 字幕请求失败
+      log.log('处理字幕和登录信息 orig params:', req._params, "resp:", resp)
+      // 用户信息和字幕请求失败
       const api = new BiliBiliApi(serverList.th);
       const subtitles = await api.getSubtitleOnThailand(req._params);
       if (resp.code === 0) {
@@ -1055,7 +1070,10 @@ const URL_HOOK = {
         resp.data = {
           // 解决东南亚未登录
           login_mid: id?.value || 0,
-          // login_mid_hash: "7874c463",
+          vip: {
+            type: 2,
+            status: 1
+          },
           subtitle: {
             allow_submit: false,
             lan: "",
@@ -1088,7 +1106,7 @@ const URL_HOOK = {
         resp.data.subtitle.subtitles.push(zhHans)
       }
     }
-    // log.log('subtitle result:', resp)
+    // log.log('result:', resp)
     req.responseText = JSON.stringify(resp)
   },
 
