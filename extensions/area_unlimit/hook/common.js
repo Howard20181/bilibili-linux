@@ -1632,93 +1632,40 @@ const UTILS = {
   fixMobiPlayUrlJson(originJson) {
     return __awaiter(this, void 0, void 0, function* () {
       const codecsMap = {
-        30112: 'avc1.640032',
-        30102: 'hev1.1.6.L150.90',
-        100027: 'av01.0.08M.08.0.110.01.01.01.0',
-        31101: 'hev1.1.6.L150.90',
-        100050: 'avc1.640032',
-        30080: 'avc1.640032',
-        100026: 'av01.0.08M.08.0.110.01.01.01.0',
-        31090: 'hev1.1.6.L120.90',
-        100048: 'avc1.640028',
-        30064: 'avc1.640028',
-        100024: 'av01.0.08M.08.0.110.01.01.01.0',
-        31057: 'hev1.1.6.L120.90',
-        100047: 'avc1.64001F',
-        30032: 'avc1.64001F',
-        100023: 'av01.0.08M.08.0.110.01.01.01.0',
-        31035: 'hev1.1.6.L120.90',
-        100046: 'avc1.64001E',
-        30016: 'avc1.64001E',
-        30006: 'avc1.64001E',
-        30005: 'avc1.64001E',
-        100022: 'av01.0.08M.08.0.110.01.01.01.0',
+        120: 'avc1.640032',
+        112: 'avc1.640032',
+        80: 'avc1.640032',
+        64: 'avc1.640028',
+        32: 'avc1.64001F',
+        16: 'avc1.64001E',
+        6: 'avc1.64001E',
+        5: 'avc1.64001E',
         30280: 'mp4a.40.2',
         30216: 'mp4a.40.5',
         30232: 'mp4a.40.2'
       };
       const resolutionMap = {
-        30112: [1920, 1080],
-        30102: [1920, 1080],
-        100027: [1920, 1080],
-        31101: [1920, 1080],
-        100050: [1920, 1080],
-        30080: [1920, 1080],
-        100026: [1920, 1080],
-        31090: [1280, 720],
-        100048: [1280, 720],
-        30064: [1280, 720],
-        100024: [1280, 720],
-        31057: [852, 480],
-        100047: [852, 480],
-        30032: [852, 480],
-        100023: [852, 480],
-        31035: [640, 360],
-        100046: [640, 360],
-        30016: [640, 360],
-        30006: [352, 240],
-        30005: [352, 240],
-        100022: [640, 360]
+        120: [3840, 2160],
+        112: [1920, 1080],
+        80: [1920, 1080],
+        64: [1280, 720],
+        32: [852, 480],
+        16: [640, 360],
+        6: [352, 240],
+        5: [352, 240]
       };
       const frameRateMap = {
-        30112: '23.810',
-        30102: '23.810',
-        100027: '23.976',
-        31101: '23.810',
-        100050: '23.810',
-        30080: '23.810',
-        100026: '23.976',
-        31090: '23.810',
-        100048: '23.810',
-        30064: '23.810',
-        100024: '23.976',
-        31057: '23.810',
-        100047: '23.810',
-        30032: '23.810',
-        100023: '23.976',
-        31035: '23.810',
-        100046: '23.810',
-        30016: '23.810',
-        30006: '23.810',
-        30005: '23.810',
-        100022: '23.976'
+        120: '23.976',
+        112: '23.810',
+        102: '23.810',
+        80: '23.810',
+        64: '23.810',
+        32: '23.810',
+        16: '23.810',
+        6: '23.810',
+        5: '23.810'
       };
       let segmentBaseMap = {};
-
-      function getId(url, default_value, get_filename = false) {
-        if (get_filename) {
-          // 作为SegmentBaseMap的Key，在同一个页面下切换集数不至于出错
-          let path = url.split('?')[0];
-          let pathArr = path.split('/');
-          return pathArr[pathArr.length - 1].replace('.m4s', ''); // 返回文件名
-        }
-        let i = /(nb2-1-)?\d{5}\.m4s/.exec(url);
-        if (i !== null) {
-          return i[0].replace('.m4s', '');
-        } else {
-          return default_value;
-        }
-      }
 
       function getSegmentBase(url, id, range = '5000') {
         // log.log('getSegmentBase', url, id, range)
@@ -1767,7 +1714,7 @@ const UTILS = {
       // let range = Math.round(result.dash.duration * 3.5).toString()
       // 乱猜 range 导致泡面番播不出
       result.dash.video.forEach((video) => {
-        taskList.push(getSegmentBase(video.base_url, getId(video.base_url, '100050', true)));
+        taskList.push(getSegmentBase(video.base_url, video.id));
       });
       result.dash.audio.forEach((audio) => {
         taskList.push(getSegmentBase(audio.base_url, audio.id));
@@ -1777,52 +1724,26 @@ const UTILS = {
         segmentBaseMap = window.__segment_base_map__;
       // 填充视频流数据
       result.dash.video.forEach((video) => {
-        let video_id = getId(video.base_url, '100050');
-        if (!codecsMap.hasOwnProperty(video_id)) {
-          // https://github.com/ipcjs/bilibili-helper/issues/775
-          // 泰区的视频URL不包含 id 了
-          video_id = (30000 + video.id).toString();
-        }
-        video.codecs = codecsMap[video_id];
-        let segmentBaseId = getId(video.base_url, '100050', true);
+        video.codecs = codecsMap[video.id];
+        let segmentBaseId = video.id
         video.segment_base = {
           initialization: segmentBaseMap[segmentBaseId][0],
           index_range: segmentBaseMap[segmentBaseId][1]
         };
-        video.SegmentBase = {
-          Initialization: segmentBaseMap[segmentBaseId][0],
-          indexRange: segmentBaseMap[segmentBaseId][1]
-        };
-        video_id = video_id.replace('nb2-1-', '');
-        video.width = resolutionMap[video_id] ? resolutionMap[video_id][0] : 0;
-        video.height = resolutionMap[video_id] ? resolutionMap[video_id] : 0;
-        video.mimeType = 'video/mp4';
+        video.width = resolutionMap[video.id] ? resolutionMap[video.id][0] : 0;
+        video.height = resolutionMap[video.id] ? resolutionMap[video.id][1] : 0;
         video.mime_type = 'video/mp4';
-        video.frameRate = frameRateMap[video_id] ? frameRateMap[video_id] : 0;
-        video.frame_rate = frameRateMap[video_id] ? frameRateMap[video_id] : 0;
-        video.sar = "1:1";
-        video.startWithSAP = 1;
-        video.start_with_sap = 1;
+        video.frame_rate = frameRateMap[video.id] ? frameRateMap[video.id] : 0;
       });
       // 填充音频流数据
       result.dash.audio.forEach((audio) => {
-        let audio_id = audio.id
-        let segmentBaseId = audio_id
+        let segmentBaseId = audio.id
         audio.segment_base = {
           initialization: segmentBaseMap[segmentBaseId][0],
           index_range: segmentBaseMap[segmentBaseId][1]
         };
-        audio.SegmentBase = {
-          Initialization: segmentBaseMap[segmentBaseId][0],
-          indexRange: segmentBaseMap[segmentBaseId][1]
-        };
-        audio.codecs = codecsMap[audio_id];
-        audio.mimeType = 'audio/mp4';
+        audio.codecs = codecsMap[audio.id];
         audio.mime_type = 'audio/mp4';
-        audio.frameRate = '';
-        audio.frame_rate = '';
-        audio.height = 0;
-        audio.width = 0;
       });
       return result;
     });
@@ -1835,7 +1756,7 @@ const UTILS = {
       let dash_audio = video_info.dash_audio;
 
       let result = {
-        'format': 'flv720',
+        'format': 'hdflv2',
         'type': 'DASH',
         'result': 'suee',
         'video_codecid': 7,
