@@ -115,7 +115,7 @@
 
 1. [BiliRoaming](https://github.com/yujincheng08/BiliRoaming)
 2. [解除B站区域限制](https://github.com/ipcjs/bilibili-helper)
-3. [BiliBili Linux版](https://github.com/msojocs/bilibili-multiplatform)
+3. [BiliBili Linux版](https://github.com/msojocs/bilibili-linux)
 
 ## 免责声明
 

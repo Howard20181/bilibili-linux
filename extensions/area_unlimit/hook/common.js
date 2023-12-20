@@ -211,7 +211,11 @@ class BiliBiliApi {
 
   async getSeasonInfoByEpSsIdOnBangumi(ep_id, season_id) {
     const res = await HTTP.get('//bangumi.bilibili.com/view/web_api/season?' + (ep_id != '' ? `ep_id=${ep_id}` : `season_id=${season_id}`))
-    return JSON.parse(res.responseText)
+    return res
+  }
+  async getSeasonInfoByEpSsIdOnPgcApi(ep_id, season_id) {
+    const res = await HTTP.get('//api.bilibili.com/pgc/view/web/season?' + (ep_id != '' ? `ep_id=${ep_id}` : `season_id=${season_id}`))
+    return res
   }
 
   async getSeasonInfoByEpSsIdOnThailand(ep_id, season_id) {
@@ -702,39 +706,53 @@ const URL_HOOK = {
 
       let seasonInfo = null;
       const params = UTILS._params2obj(req._params)
-      seasonInfo = await api.getSeasonInfoByEpSsIdOnBangumi(params.ep_id || "", params.season_id || "")
+      log.log('getSeason', params)
       const user_status = SEASON_STATUS_CACHE[params.season_id]
-      if (seasonInfo.code === 0) {
-        // title id
-        seasonInfo.result.episodes.forEach(ep => {
-          ep.title = ep.title || `${ep.index}`
-          ep.id = ep.id || ep.ep_id
-          ep.status = ep.episode_status
-          ep.rights = { allow_download: 1, area_limit: 0 }
-          ep.long_title = ep.index_title
-        })
-        seasonInfo.result.new_ep = seasonInfo.result.newest_ep
-        seasonInfo.result.status = seasonInfo.result.status || 2
-        // 处理部分番剧存在平台限制
-        seasonInfo.result.rights.watch_platform = 0
-        seasonInfo.result.rights.allow_download = 1
-        seasonInfo.result.status = 13
-        seasonInfo.result.total = seasonInfo.result.total_ep
-        seasonInfo.result.type = 1
+      let response = await api.getSeasonInfoByEpSsIdOnBangumi(params.ep_id || "", params.season_id || "")
+      if (response.status === 200) {
+        seasonInfo = JSON.parse(response.responseText)
+        if (seasonInfo.code === 0) {
+          // title id
+          seasonInfo.result.episodes.forEach(ep => {
+            ep.title = ep.title || `${ep.index}`
+            ep.id = ep.id || ep.ep_id
+            ep.status = ep.episode_status
+            ep.rights = { allow_download: 1, area_limit: 0 }
+            ep.long_title = ep.index_title
+          })
+          seasonInfo.result.new_ep = seasonInfo.result.newest_ep
+          seasonInfo.result.status = seasonInfo.result.status || 2
+          // 处理部分番剧存在平台限制
+          seasonInfo.result.rights.watch_platform = 0
+          seasonInfo.result.rights.allow_download = 1
+          seasonInfo.result.status = 13
+          seasonInfo.result.total = seasonInfo.result.total_ep
+          seasonInfo.result.type = 1
 
-        if (user_status) {
-          seasonInfo.result['user_status'] = {
-            area_limit: user_status.area_limit,
-            ban_area_show: user_status.ban_area_show, follow: user_status.follow,
-            follow_status: user_status.follow_status, login: user_status.login,
-            pay: user_status.pay, pay_pack_paid: user_status.pay_pack_paid,
-            sponsor: user_status.sponsor,
+          if (user_status) {
+            seasonInfo.result['user_status'] = {
+              area_limit: user_status.area_limit,
+              ban_area_show: user_status.ban_area_show, follow: user_status.follow,
+              follow_status: user_status.follow_status, login: user_status.login,
+              pay: user_status.pay, pay_pack_paid: user_status.pay_pack_paid,
+              sponsor: user_status.sponsor,
+            }
+          }
+
+          log.log('seasonInfo from 主站: ', seasonInfo)
+          req.responseText = JSON.stringify(seasonInfo)
+          return;
+        }
+      } else {
+        response = await api.getSeasonInfoByEpSsIdOnPgcApi(params.ep_id || "", params.season_id || "")
+        if (response.status === 200) {
+          seasonInfo = JSON.parse(response.responseText)
+          if (seasonInfo.code === 0) {
+            log.log('seasonInfo from 主站: ', seasonInfo)
+            req.responseText = JSON.stringify(seasonInfo)
+            return;
           }
         }
-
-        log.log('seasonInfo from 主站: ', seasonInfo)
-        req.responseText = JSON.stringify(seasonInfo)
-        return;
       }
 
       let server = serverList['th'] || ""
