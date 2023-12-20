@@ -386,11 +386,12 @@ window.log = window.log || {
           const login = new BiliBiliApi()
           try {
             log.info('获取登录二维码')
-            const qr = await login.HD_getLoginQrCode()
+            const qr = await login.getLoginQrCode()
             this.hdLogin.qrCode = qr.data.url
+            // await login.confirmLogin(qr.data.auth_code)
             let t = setInterval(async () => {
               log.info('获取扫码结果')
-              const ret = await login.HD_pollCheckLogin(qr.data.auth_code)
+              const ret = await login.pollCheckLogin(qr.data.auth_code)
               log.log('扫码结果：', ret)
               if (ret.code === 0) {
                 this.hdLogin.qrCode = ''

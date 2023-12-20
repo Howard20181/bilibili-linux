@@ -196,23 +196,15 @@ class BiliBiliApi {
     const sign = hex_md5(str + this.appSecret)
     return `${str}&sign=${sign}`
   }
-  genDeviceId() {
-    let deviceId = localStorage.getItem('device_id')
-    if (deviceId != null) return deviceId
-    deviceId = hex_md5(`${Math.random()}`) + hex_md5(`${Math.random()}`)
-    localStorage.setItem('device_id', deviceId)
-    return deviceId
-  }
 
   /**
    * 获取登录二维码
    * @return {Promise<any>}
    * @constructor
    */
-  async HD_getLoginQrCode() {
+  async getLoginQrCode() {
     const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code'
     const param = {
-      build: 1442100,
       local_id: 0,
       ts: (Date.now() / 1000).toFixed(0)
     }
@@ -229,16 +221,44 @@ class BiliBiliApi {
   }
 
   /**
+ * 确认登录
+ * @param authCode
+ * @return {Promise<any>}
+ * @constructor
+ */
+  async confirmLogin(authCode) {
+    const url = 'https://passport.bilibili.com/x/passport-tv-login/h5/qrcode/confirm'
+    const bili_jct = await cookieStore.get('bili_jct') || {}
+    const param = {
+      auth_code: authCode,
+      build: 7082000,
+      csrf: bili_jct?.value
+    }
+    const DedeUserID = await cookieStore.get('DedeUserID') || {}
+    const SESSDATA = await cookieStore.get('SESSDATA') || {}
+    const _resp = await HTTP.post(url, this.genSignParam(param), {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      cookie: `DedeUserID=${DedeUserID?.value}; SESSDATA=${SESSDATA?.value}`
+    })
+    const resp = JSON.parse(_resp.responseText)
+    if (resp.code === 0) {
+      return resp
+    }
+    else {
+      throw new Error(resp.code, resp.message)
+    }
+  }
+
+  /**
    * 检查登录结果
    * @param authCode
    * @return {Promise<any>}
    * @constructor
    */
-  async HD_pollCheckLogin(authCode) {
+  async pollCheckLogin(authCode) {
     const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/poll'
     const param = {
       auth_code: authCode,
-      build: 1442100,
       local_id: 0,
       ts: (Date.now() / 1000).toFixed(0),
     }
@@ -258,20 +278,13 @@ class BiliBiliApi {
     this.server = server
   }
 
-  getSeasonInfoByEpId(ep_id) {
-    return HTTP.get(`//${this.server}/pgc/view/web/season?ep_id=${ep_id}`);
-  }
-
-  getSeasonInfo(season_id, headers = {}) {
-    return HTTP.get(`//${this.server}/pgc/view/web/season?season_id=${season_id}`, headers);
+  async getSeasonSectionBySsId(season_id) {
+    const res = await HTTP.get('//api.bilibili.com/pgc/web/season/section?' + `season_id=${season_id}`)
+    return res
   }
 
   async getSeasonInfoByEpSsIdOnBangumi(ep_id, season_id) {
     const res = await HTTP.get('//bangumi.bilibili.com/view/web_api/season?' + (ep_id != '' ? `ep_id=${ep_id}` : `season_id=${season_id}`))
-    return res
-  }
-  async getSeasonInfoByEpSsIdOnPgcApi(ep_id, season_id) {
-    const res = await HTTP.get('//api.bilibili.com/pgc/view/web/season?' + (ep_id != '' ? `ep_id=${ep_id}` : `season_id=${season_id}`))
     return res
   }
 
@@ -298,11 +311,6 @@ class BiliBiliApi {
       }
     }
     return subtitles
-  }
-
-  async getPlayURL(req, ak, area) {
-    const res = await HTTP.get(`//${this.server}/pgc/player/web/playurl?${req._params}&access_key=${ak}&area=${area}`)
-    return JSON.parse(res.responseText || "{}")
   }
 
   async getPlayURLApp(req, ak, area) {
@@ -619,6 +627,7 @@ const uposMap = {
 };
 const AREA_MARK_CACHE = {}
 let SEASON_STATUS_CACHE = {}
+let SEASON_EPID_CACHE = {}
 // HOOK
 const URL_HOOK = {
 
@@ -676,10 +685,18 @@ const URL_HOOK = {
           return;
         }
       } else {
-        response = await api.getSeasonInfoByEpSsIdOnPgcApi(params.ep_id || "", params.season_id || "")
+        seasonInfo = { code: 0, message: 'success', result: {} }
+        if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
+        let response = await api.getSeasonSectionBySsId(params.season_id)
         if (response.status === 200) {
-          seasonInfo = JSON.parse(response.responseText)
-          if (seasonInfo.code === 0) {
+          let selection = JSON.parse(response.responseText)
+          if (selection.code === 0) {
+            seasonInfo.result['episodes'] = selection.result.main_section.episodes
+            if (params.season_id) {
+              seasonInfo.result.episodes.forEach(ep => {
+                SEASON_EPID_CACHE[ep.id] = params.season_id
+              })
+            }
             log.log('seasonInfo from 主站: ', seasonInfo)
             req.responseText = JSON.stringify(seasonInfo)
             return;
@@ -1805,7 +1822,7 @@ const UTILS = {
     const result = {
       access_key: params.access_key,
       appkey: area === 'th' ? '7d089525d3611b1c' : '27eb53fc9058f8c3',
-      build: area === 'th' ? '1001310' : '1442100',
+      build: area === 'th' ? '1001310' : null,
       c_locale: area === 'th' ? 'zh_SG' : 'zh_CN',
       channel: 'yingyongbao',
       device: 'android',
