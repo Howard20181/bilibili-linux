@@ -175,9 +175,9 @@ function getScript(url, callback) {
 
 // 哔哩哔哩API
 class BiliBiliApi {
-  constructor(server = 'api.bilibili.com') {
-    this.appKey = 'dfca71928277209b'
-    this.appSecret = 'b5475a8825547a4fc26c7d518eaaa02e'
+  constructor(server = 'api.bilibili.com', appKey = '27eb53fc9058f8c3', appSecret = 'c2ed53a74eeefe3cf99fbd01d8c9c375') {
+    this.appKey = appKey
+    this.appSecret = appSecret
     this.server = server;
   }
 
@@ -195,6 +195,63 @@ class BiliBiliApi {
     const str = pList.map(e => `${e.key}=${encodeURIComponent(e.value)}`).join('&')
     const sign = hex_md5(str + this.appSecret)
     return `${str}&sign=${sign}`
+  }
+  genDeviceId() {
+    let deviceId = localStorage.getItem('device_id')
+    if (deviceId != null) return deviceId
+    deviceId = hex_md5(`${Math.random()}`) + hex_md5(`${Math.random()}`)
+    localStorage.setItem('device_id', deviceId)
+    return deviceId
+  }
+
+  /**
+   * 获取登录二维码
+   * @return {Promise<any>}
+   * @constructor
+   */
+  async HD_getLoginQrCode() {
+    const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code'
+    const param = {
+      build: 1442100,
+      local_id: 0,
+      ts: (Date.now() / 1000).toFixed(0)
+    }
+    const _resp = await HTTP.post(url, this.genSignParam(param), {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    })
+    const resp = JSON.parse(_resp.responseText)
+    if (resp.code === 0) {
+      return resp
+    }
+    else {
+      throw new Error(resp.code, resp.message)
+    }
+  }
+
+  /**
+   * 检查登录结果
+   * @param authCode
+   * @return {Promise<any>}
+   * @constructor
+   */
+  async HD_pollCheckLogin(authCode) {
+    const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/poll'
+    const param = {
+      auth_code: authCode,
+      build: 1442100,
+      local_id: 0,
+      ts: (Date.now() / 1000).toFixed(0),
+    }
+    const _resp = await HTTP.post(url, this.genSignParam(param), {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    })
+    const resp = JSON.parse(_resp.responseText)
+    if (resp.code >= 0) {
+      return resp
+    }
+    else {
+      throw new Error(resp.code, resp.message)
+    }
   }
 
   setServer(server) {
@@ -220,7 +277,7 @@ class BiliBiliApi {
 
   async getSeasonInfoByEpSsIdOnThailand(ep_id, season_id) {
     const params = '?' + (ep_id !== '' ? `ep_id=${ep_id}` : `season_id=${season_id}`) + `&mobi_app=bstar_a&s_locale=zh_SG`;
-    const newParams = UTILS.generateMobiPlayUrlParams(params, 'th');
+    const newParams = UTILS.generateThMobiPlayUrlParams(params);
     const res = await HTTP.get(`//${this.server}/intl/gateway/v2/ogv/view/app/season?` + newParams)
     return JSON.parse(res.responseText || "{}")
   }
@@ -268,7 +325,6 @@ class BiliBiliApi {
       fnver: p.fnver,
       force_host: 0,
       fourk: p.fourk,
-      mobi_app: 'android_hd',
       platform: 'android',
       qn: p.qn,
       ts: (Date.now() / 1000).toFixed(0),
@@ -279,7 +335,7 @@ class BiliBiliApi {
   }
   async getPlayURLThailand(req, ak, area) {
     const params = `?${req._params}&mobi_app=bstar_a&s_locale=zh_SG`;
-    const newParams = UTILS.generateMobiPlayUrlParams(params, 'th');
+    const newParams = UTILS.generateThMobiPlayUrlParams(params);
     const res = await HTTP.get(`//${this.server}/intl/gateway/v2/ogv/playurl?${newParams}`)
     // 参考：哔哩漫游 油猴插件
     let result = JSON.parse(res.responseText || "{}")
@@ -304,7 +360,6 @@ class BiliBiliApi {
         try {
 
           const resp = JSON.parse(res.responseText)
-          // log.log("searchBangumi: ", resp)
           if (area === "th")
             resolve(UTILS.handleTHSearchResult(resp.data?.items || []))
           else {
@@ -319,26 +374,6 @@ class BiliBiliApi {
         }
       })
     })
-  }
-
-  async searchBangumi2(params, area, buvid3 = '') {
-    let path = "x/web-interface/search/type"
-    if (area === "th") path = "intl/gateway/v2/app/search/type"
-    const url = `roaming://${this.server}/${path}?${params}&area=${area}${area === "th" ? '&type=7' : ''}`
-
-    const res = await HTTP.get(url, { 'x-cookie': `buvid3=${buvid3}` })
-    // log.log('search result:', res)
-    // log.log(res.responseText)
-    try {
-      const resp = JSON.parse(res.responseText)
-      log.log("searchBangumi: ", resp)
-      if (area === "th")
-        return UTILS.handleTHSearchResult(resp.data.items || [])
-      else
-        return resp.data?.result || []
-    } catch (e) {
-      throw new Error(e)
-    }
   }
 
   /**
@@ -372,109 +407,6 @@ class BiliBiliApi {
     }
     throw new Error(resp.code, resp.message)
   }
-
-  genDeviceId() {
-    let deviceId = localStorage.getItem('device_id')
-    if (deviceId != null) return deviceId
-    deviceId = hex_md5(`${Math.random()}`) + hex_md5(`${Math.random()}`)
-    localStorage.setItem('device_id', deviceId)
-    return deviceId
-  }
-
-  /**
-   * 获取登录二维码
-   * @return {Promise<any>}
-   * @constructor
-   */
-  async HD_getLoginQrCode() {
-    const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code'
-    const deviceId = this.genDeviceId()
-    const buvid = deviceId + deviceId.substring(0, 5)
-    const param = {
-      bili_local_id: deviceId,
-      build: 1442100,
-      buvid: buvid,
-      c_locale: 'zh_CN',
-      channel: 'yingyongbao',
-      code: '',
-      device: 'phone',
-      device_id: deviceId,
-      device_name: 'OnePlus7TPro',
-      device_platform: 'Android10OnePlusHD1910',
-      disable_rcmd: 0,
-      guid: buvid,
-      local_id: buvid,
-      mobi_app: 'android_hd',
-      networkstate: 'wifi',
-      platform: 'android',
-      s_locale: 'zh_CN',
-      spm_id: 'from_spmid',
-      statistics: '{"appId":5,"platform":3,"version":"1.44.2","abtest":""}',
-      sys_ver: '29',
-      ts: (Date.now() / 1000).toFixed(0)
-    }
-    const _resp = await HTTP.post(url, this.genSignParam(param), {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'app-key': 'android_hd',
-      env: 'prod',
-      buvid: buvid,
-    })
-    const resp = JSON.parse(_resp.responseText)
-    if (resp.code === 0) {
-      return resp
-    }
-    else {
-      throw new Error(resp.code, resp.message)
-    }
-  }
-
-  /**
-   * 检查登录结果
-   * @param authCode
-   * @return {Promise<any>}
-   * @constructor
-   */
-  async HD_pollCheckLogin(authCode) {
-    const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/poll'
-    const deviceId = this.genDeviceId()
-    const buvid = deviceId + deviceId.substring(0, 5)
-    const param = {
-      auth_code: authCode,
-      bili_local_id: deviceId,
-      build: 1442100,
-      buvid: buvid,
-      c_locale: 'zh_CN',
-      channel: 'yingyongbao',
-      device: 'phone',
-      device_id: deviceId,
-      device_name: 'OnePlus7TPro',
-      device_platform: 'Android10OnePlusHD1910',
-      disable_rcmd: 0,
-      extend: '',
-      local_id: buvid,
-      mobi_app: 'android_hd',
-      platform: 'android',
-      s_locale: 'zh_CN',
-      spm_id: 'from_spmid',
-      statistics: '{"appId":5,"platform":3,"version":"1.44.2","abtest":""}',
-      ts: (Date.now() / 1000).toFixed(0),
-    }
-    const _resp = await HTTP.post(url, this.genSignParam(param), {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'app-key': 'android_hd',
-      env: 'prod',
-      buvid: buvid,
-    })
-    const resp = JSON.parse(_resp.responseText)
-    if (resp.code >= 0) {
-      return resp
-    }
-    else {
-      throw new Error(resp.code, resp.message)
-    }
-
-  }
-
 }
 
 const space_account_info_map = {
@@ -1042,14 +974,12 @@ const URL_HOOK = {
 
         api.setServer(server)
         try {
-          // const buvid3 = await cookieStore.get('buvid3') || {}
           function sleep(d) {
             for (var t = Date.now(); Date.now() - t <= d;) {
             }
           }
 
           sleep(500); //当前方法暂停0.5秒
-          // const result = await api.searchBangumi2(req._params, area, buvid3.value || '')
           const result = await api.searchBangumi(params, area)
           // log.log('searchResult:', result)
           result.forEach(s => {
@@ -1083,6 +1013,7 @@ const URL_HOOK = {
         resp.data.subtitle.subtitles.push(...subtitles)
       } else if (subtitles.length > 1) {
         const id = await cookieStore.get('DedeUserID') || {}
+        log.log('DedeUserID:', id)
         resp.code = 0
         resp.message = "0"
         resp.data = {
@@ -1170,14 +1101,12 @@ const URL_HOOK_FETCH = {
 
         api.setServer(server)
         try {
-          // const buvid3 = await cookieStore.get('buvid3') || {}
           function sleep(d) {
             for (var t = Date.now(); Date.now() - t <= d;) {
             }
           }
 
           sleep(500); //当前方法暂停0.5秒
-          // const result = await api.searchBangumi2(req._params, area, buvid3.value || '')
           const result = await api.searchBangumi(params, area)
           // log.log('searchResult:', result)
           result.forEach(s => {
@@ -1595,7 +1524,7 @@ const UTILS = {
     }
     return result
   },
-  generateMobiPlayUrlParams(originUrl, area) {
+  generateThMobiPlayUrlParams(originUrl) {
     // 提取参数为数组
     let a = originUrl.split('?')[1].split('&');
     // 参数数组转换为对象
@@ -1608,23 +1537,11 @@ const UTILS = {
     }
     // 追加 mobi api 需要的参数
     theRequest.access_key = UTILS.getAccessToken();
-    if (area === 'th') {
-      theRequest.area = 'th';
-      theRequest.appkey = '7d089525d3611b1c';
-      theRequest.build = '1001310';
-      theRequest.mobi_app = 'bstar_a';
-      theRequest.platform = 'android';
-    } else {
-      theRequest.area = area;
-      theRequest.appkey = '07da50c9a0bf829f';
-      theRequest.build = '5380700';
-      theRequest.device = 'android';
-      theRequest.mobi_app = 'android_b';
-      theRequest.platform = 'android_b';
-      theRequest.buvid = 'XY418E94B89774E201E22C5B709861B7712DD';
-      theRequest.fnval = '976'; // 强制 FLV
-      theRequest.track_path = '0';
-    }
+    theRequest.area = 'th';
+    theRequest.appkey = '7d089525d3611b1c';
+    theRequest.build = '1001310';
+    theRequest.mobi_app = 'bstar_a';
+    theRequest.platform = 'android';
     theRequest.force_host = '2'; // 强制音视频返回 https
     theRequest.ts = `${~~(Date.now() / 1000)}`;
     // 所需参数数组
@@ -1638,11 +1555,7 @@ const UTILS = {
     }
     // 准备明文
     let plaintext = '';
-    if (area === 'th') {
-      plaintext = mobi_api_params.slice(0, -1) + `acd495b248ec528c2eed1e862d393126`;
-    } else {
-      plaintext = mobi_api_params.slice(0, -1) + `560c52ccd288fed045859ed18bffd973`;
-    }
+    plaintext = mobi_api_params.slice(0, -1) + `acd495b248ec528c2eed1e862d393126`;
     // 生成 sign
     let ciphertext = hex_md5(plaintext);
     return `${mobi_api_params}sign=${ciphertext}`;
@@ -1882,7 +1795,7 @@ const UTILS = {
     if (area === 'th') {
       plaintext = mobi_api_params.slice(0, -1) + `acd495b248ec528c2eed1e862d393126`;
     } else {
-      plaintext = mobi_api_params.slice(0, -1) + `560c52ccd288fed045859ed18bffd973`;
+      plaintext = mobi_api_params.slice(0, -1) + `c2ed53a74eeefe3cf99fbd01d8c9c375`;
     }
     // log.log(plaintext)
     // 生成 sign
@@ -1890,9 +1803,9 @@ const UTILS = {
   },
   genSearchParam(params, area) {
     const result = {
-      // access_key: params.access_key,
-      appkey: area === 'th' ? '7d089525d3611b1c' : '1d8b6e7d45233436',
-      build: area === 'th' ? '1001310' : '6400000',
+      access_key: params.access_key,
+      appkey: area === 'th' ? '7d089525d3611b1c' : '27eb53fc9058f8c3',
+      build: area === 'th' ? '1001310' : '1442100',
       c_locale: area === 'th' ? 'zh_SG' : 'zh_CN',
       channel: 'yingyongbao',
       device: 'android',
@@ -1903,7 +1816,7 @@ const UTILS = {
       highlight: 1,
       keyword: params.keyword,
       lang: 'hans',
-      mobi_app: area === 'th' ? 'bstar_a' : 'android',
+      mobi_app: area === 'th' ? 'bstar_a' : null,
       platform: 'android',
       pn: 1,
       ps: 20,
@@ -1914,20 +1827,14 @@ const UTILS = {
       statistics: encodeURIComponent('{"appId":1,"platform":3,"version":"6.85.0","abtest":""}'),
       ts: parseInt(new Date().getTime() / 1000),
       type: 7,
-      sign: ''
+      area: area
     }
-    if (area === 'th') {
-      result.access_key = params.access_key
-      result.sign = UTILS.genSearchSign(result, area)
-    } else {
-      result.area = area
-    }
+    result.sign = UTILS.genSearchSign(result, area)
     let a = ''
     for (const k in result) {
       a += `${k}=${result[k]}&`
     }
     return a.substring(0, a.length - 1)
-
   },
   _params2obj(params) {
     const arr = params.split('&')
