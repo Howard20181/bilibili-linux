@@ -72,20 +72,16 @@ class DB {
    * @returns {Promise<unknown>}
    */
   open() {
-    // log.log('open')
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.name, this.version);
       request.onerror = (event) => {
-        // console.error("为什么不允许我的 web 应用使用 IndexedDB！");
         reject(event)
       };
       request.onsuccess = (event) => {
-        // log.log('open success')
         this.db = event.target.result;
         resolve(this)
       };
       request.onupgradeneeded = (e) => {
-        // log.log('open', 'onupgradeneeded')
         const db = e.target.result;
         db.createObjectStore('b2d', { keyPath: 'bvid' })
       }
@@ -97,7 +93,6 @@ class DB {
    * @param {{bvid: string, dynamic_id: string}} b2d
    */
   putBvid2DynamicId(b2d) {
-    // log.log('addBvid2DynamicId')
     return new Promise((resolve, reject) => {
       if (this.tran == null) {
         this.tran = this.db.transaction('b2d', 'readwrite')
@@ -106,11 +101,9 @@ class DB {
 
       const req = store.put(b2d)
       req.onsuccess = (e) => {
-        // log.log('addBvid2DynamicId', 'success')
         resolve(e)
       }
       req.onerror = (e) => {
-        // log.log('addBvid2DynamicId', 'error', e)
         reject(e)
       }
     })
@@ -156,7 +149,6 @@ function getScript(url, callback) {
   script.type = "text/javascript"; // 定义script元素的类型(可省略)
   if (typeof (callback) != "undefined") { // 判断是否使用回调方法(第二个参数)
     if (script.readyState) {// js状态
-      // log.log(script.onreadystatechange); // onreadystatechange：js状态改变时执行下方函数
       script.onreadystatechange = function () {
         if (script.readyState == "loaded" || script.readyState == "complete") { // loaded：是否下载完成 complete：js执行完毕
           script.onreadystatechange = null;
@@ -282,6 +274,22 @@ class BiliBiliApi {
     const res = await HTTP.get('//api.bilibili.com/pgc/web/season/section?' + `season_id=${season_id}`)
     return res
   }
+  async getTagsByAidOrBvId(aid, bvid) {
+    const res = await HTTP.get('//api.bilibili.com/x/tag/archive/tags?' + (aid != '' ? `aid=${aid}` : `bvid=${bvid}`))
+    return res
+  }
+  async getTagDetailByTagId(tid) {
+    const res = await HTTP.get('//api.bilibili.com/x/tag/detail?pn=0&ps=1&' + `tag_id=${tid}`)
+    return res
+  }
+  async getUserStatusInfoById(season_id) {
+    const param = {
+      season_id: season_id,
+      access_key: UTILS.getAccessToken()
+    }
+    const res = await HTTP.get('//api.bilibili.com/pgc/view/web/season/user/status?' + `${this.genSignParam(param)}`)
+    return res
+  }
 
   async getSeasonInfoByEpSsIdOnBangumi(ep_id, season_id) {
     const res = await HTTP.get('//bangumi.bilibili.com/view/web_api/season?' + (ep_id != '' ? `ep_id=${ep_id}` : `season_id=${season_id}`))
@@ -320,7 +328,6 @@ class BiliBiliApi {
       const t = _pp.split('=')
       p[t[0]] = t[1]
     }
-    // log.log('origin param:', p)
     const url = `https://${this.server}/pgc/player/api/playurl`
     const param = {
       access_key: ak,
@@ -393,7 +400,6 @@ class BiliBiliApi {
     const url = `https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/get_dynamic_detail?dynamic_id=${dynamicId}`
     const res = await HTTP.get(url)
     const resp = JSON.parse(res.responseText)
-    // log.log('dynamicDetail:', resp)
     if (resp.code === 0) {
       return resp
     }
@@ -409,7 +415,6 @@ class BiliBiliApi {
     const url = `https://api.bilibili.com/x/web-interface/card?mid=${userId}`
     const res = await HTTP.get(url)
     const resp = JSON.parse(res.responseText)
-    // log.log('dynamicDetail:', resp)
     if (resp.code === 0) {
       return resp
     }
@@ -637,9 +642,7 @@ const URL_HOOK = {
    * @returns {Promise<void>}
    */
   "https://api.bilibili.com/pgc/view/pc/season": async (req) => {
-    log.log('HOOK', req)
     const resp = JSON.parse(req.responseText || "{}")
-    // log.log('season info resp: ', req.responseText)
     if (resp.code !== 0) {
       // 状态码异常
       const api = new BiliBiliApi()
@@ -647,7 +650,7 @@ const URL_HOOK = {
 
       let seasonInfo = null;
       const params = UTILS._params2obj(req._params)
-      log.log('getSeason', params)
+      log.log('getSeason', params, resp)
       const user_status = SEASON_STATUS_CACHE[params.season_id]
       let response = await api.getSeasonInfoByEpSsIdOnBangumi(params.ep_id || "", params.season_id || "")
       if (response.status === 200) {
@@ -693,10 +696,55 @@ const URL_HOOK = {
           if (selection.code === 0) {
             seasonInfo.result['episodes'] = selection.result.main_section.episodes
             if (params.season_id) {
+              seasonInfo.result['season_id'] = params.season_id
+              seasonInfo.result['share_url'] = `https://www.bilibili.com/bangumi/play/ss${params.season_id}`
+              seasonInfo.result['show_season_type'] = 1
+              seasonInfo.result['type'] = 1
+            }
+            api.getTagsByAidOrBvId(seasonInfo.result.episodes[0].aid).then(res => {
+              if (res.status === 200) {
+                let tag = JSON.parse(res.responseText)
+                if (tag.code === 0) {
+                  log.log('getTagByAidOrBvId', tag.data)
+                  if (tag.data.length > 0) {
+                    tag.data.forEach(t => {
+                      if (t.tag_name.includes('僅限') || t.tag_name.includes('仅限')) {
+                        seasonInfo.result['season_title'] = t.tag_name
+                        seasonInfo.result['title'] = t.tag_name
+                        seasonInfo.result['series'] = { display_type: 0, series_title: t.tag_name }
+                        seasonInfo.result['seasons'] = { season_id: params.season_id, season_title: t.tag_name, season_type: 1 }
+                        api.getTagDetailByTagId(t.tag_id).then(res => {
+                          if (res.status === 200) {
+                            let tagDetail = JSON.parse(res.responseText)
+                            if (tagDetail.code === 0) {
+                              log.log('getTagDetailByTagId', tagDetail.data)
+                            }
+                          }
+                        })
+                      }
+                    })
+                  }
+                }
+              }
               seasonInfo.result.episodes.forEach(ep => {
                 SEASON_EPID_CACHE[ep.id] = params.season_id
+                ep['ep_id'] = ep.id
+                ep['link'] = `https://www.bilibili.com/bangumi/play/ep${ep.id})}`
+                ep['rights'] = { allow_download: 1, area_limit: 0, allow_dm: 1 }
+                ep['short_link'] = `https://b23.tv/ep${ep.id}`
+                ep['index_title'] = seasonInfo.result.title
               })
-            }
+            })
+            api.getUserStatusInfoById(params.season_id).then(res => {
+              if (res.status === 200) {
+                let user_status = JSON.parse(res.responseText)
+                if (user_status.code === 0) {
+                  user_status.result.area_limit = 0
+                  user_status.result.ban_area_show = 0
+                  seasonInfo.result['user_status'] = user_status.result
+                }
+              }
+            })
             log.log('seasonInfo from 主站: ', seasonInfo)
             req.responseText = JSON.stringify(seasonInfo)
             return;
@@ -746,6 +794,7 @@ const URL_HOOK = {
             ep['ep_index'] = eid + 1
             ep['selection_index'] = sid + 1
             ep['rights'] = { allow_demand: 0, allow_dm: 0, allow_download: 0, area_limit: 0 }
+            ep['skip'] = ep.jump
             if (!ep.cid || ep.cid === 0) ep['cid'] = ep.id
             if (!ep.aid || ep.aid === 0) ep['aid'] = seasonInfo.result.season_id
             episodes.push(ep)
@@ -793,9 +842,7 @@ const URL_HOOK = {
     }
     resp.result && (resp.result.area_limit = 0)
     SEASON_STATUS_CACHE[params.season_id] = resp.result
-    log.log('user_status', params, resp.result)
     req.responseText = JSON.stringify(resp)
-    // log.log('season status: season_id=', params.season_id, req.responseText)
   },
 
   /**
@@ -812,8 +859,6 @@ const URL_HOOK = {
       const upos = localStorage.upos || ""
       const isReplaceAkamai = localStorage.replaceAkamai === "true"
       const accessKey = UTILS.getAccessToken()
-      log.info('serverList:', serverList)
-
       const api = new BiliBiliApi()
       if (serverList[AREA_MARK_CACHE[params.ep_id]] && serverList[AREA_MARK_CACHE[params.ep_id]].length > 0) {
         api.setServer(serverList[AREA_MARK_CACHE[params.ep_id]])
@@ -851,10 +896,8 @@ const URL_HOOK = {
       // 没有从cache的区域中取到播放链接，遍历漫游服务器
       for (let area in serverList) {
         const server = serverList[area] || ""
-        log.log('getPlayURL from', area, '-', server)
         if (server.length === 0) continue;
         api.setServer(server)
-
         let playURL
         if (area !== "th") {
           playURL = await api.getPlayURLApp(req, accessKey || "", area)
@@ -869,6 +912,7 @@ const URL_HOOK = {
           }
           continue
         }
+        log.log('getPlayURL from', area, server)
         const playURLNew = { code: playURL.code, message: "success", result: playURL }
         playURL = playURLNew
         // 解析成功
@@ -1451,7 +1495,7 @@ const UTILS = {
     }
   },
   replaceUpos(playURL, host, replaceAkamai = false, area = "") {
-    log.log('replaceUpos:', host, replaceAkamai)
+    log.log('replaceUpos:', host, 'replaceAkamai:', replaceAkamai)
     if (host) {
       playURL.result.dash.video.forEach(v => {
         if (!v.base_url.includes("akamaized.net") || replaceAkamai || area === "th") {
