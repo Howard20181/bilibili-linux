@@ -232,10 +232,16 @@ class BiliBiliApi {
       })
     }
     const _param = pList.map(e => `${e.key}=${encodeURIComponent(e.value)}`).join('&')
-    const _resp = await HTTP.post(url, _param, {
-      'Content-Type': 'application/x-www-form-urlencoded'
+    const DedeUserID = await cookieStore.get('DedeUserID') || {}
+    const SESSDATA = await cookieStore.get('SESSDATA') || {}
+    const _resp = await fetch(url, {
+      method: "POST", body: _param, headers: {
+        "User-Agent": navigator.userAgent,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        cookie: `DedeUserID=${DedeUserID?.value}; SESSDATA=${SESSDATA?.value}`
+      }
     })
-    const resp = JSON.parse(_resp.responseText)
+    const resp = await _resp.json()
     log.log('confirmLogin', resp)
     if (resp.code === 0) {
       return resp
@@ -410,6 +416,22 @@ class BiliBiliApi {
    */
   async getDynamicDetail(dynamicId) {
     const url = `https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/get_dynamic_detail?dynamic_id=${dynamicId}`
+    const res = await HTTP.get(url)
+    const resp = JSON.parse(res.responseText)
+    if (resp.code === 0) {
+      return resp
+    }
+    throw new Error(resp.code + ": " + resp.message)
+  }
+  /**
+ * 获取动态详情
+ *
+ * @param {string} bvid
+ */
+  async getDynamicDetailByBvID(bvid) {
+    const params = { bvid: bvid }
+    const _params = await UTILS.genWbiparams(params)
+    const url = `https://api.bilibili.com/x/web-interface/wbi/view/detail?${_params}`
     const res = await HTTP.get(url)
     const resp = JSON.parse(res.responseText)
     if (resp.code === 0) {
@@ -833,55 +855,59 @@ const URL_HOOK = {
     if (resp.code !== 0) {
       log.warn('[player]: 播放链接获取出现问题:', resp.message)
       const params = UTILS._params2obj(req._params)
-      const serverList = JSON.parse(localStorage.serverList || "{}")
-      const accessKey = UTILS.getAccessToken()
-      const api = new BiliBiliApi()
-      let area = serverList[AREA_MARK_CACHE[params.ep_id]]
-      if (serverList[area] && serverList[area].length > 0) {
-        api.setServer(serverList[area])
+      if (params.ep_id) {
+        const serverList = JSON.parse(localStorage.serverList || "{}")
+        const accessKey = UTILS.getAccessToken()
+        const api = new BiliBiliApi()
         let playURL;
-        if (area !== "th")
-          playURL = await api.getPlayURLApp(req, accessKey || "", area)
-        else {
-          playURL = await api.getPlayURLThailand(req)
+        let area
+        if (AREA_MARK_CACHE[params.ep_id]) {
+          area = serverList[AREA_MARK_CACHE[params.ep_id]]
+          if (serverList[area] && serverList[area].length > 0) {
+            api.setServer(serverList[area])
+            if (area !== "th")
+              playURL = await api.getPlayURLApp(req, accessKey || "", area)
+            else {
+              playURL = await api.getPlayURLThailand(req)
+            }
+            // log.log(area, "已从缓存地区获取播放链接", playURL)
+            if (playURL.code === 401) {
+              log.log('获取播放链接失败：', playURL.message)
+            }
+          }
+        }
+        if (!playURL || (playURL.code !== 0 && playURL.code !== 401)) {
+          // 没有从cache的区域中取到播放链接，遍历漫游服务器
+          for (let a in serverList) {
+            const server = serverList[a] || ""
+            if (server.length === 0) continue;
+            api.setServer(server)
+            if (a !== "th") {
+              playURL = await api.getPlayURLApp(req, accessKey || "", a)
+            } else {
+              playURL = await api.getPlayURLThailand(req)
+            }
+            // log.log(a, "已获取播放链接", playURL)
+            if (playURL.code === 0) {
+              area = a
+              break
+            }
+            if (playURL.code !== 0) {
+              if (playURL.code === 401) {
+                log.log('获取播放链接失败：', playURL.message)
+                break
+              }
+              continue
+            }
+          }
         }
         if (playURL.code === 0) {
-          // 从cache的区域中取到了播放链接
+          // log.log('getPlayURL from', area, serverList[area])
+          AREA_MARK_CACHE[params.ep_id] = area
           playURL = UTILS.fixPlayURL(playURL, area)
-          log.log('playURL:', playURL)
-          req.responseText = JSON.stringify(playURL)
-          return;
-        } else if (resp.code === 401) {
-          log.log('获取播放链接失败：', resp.message)
-          return
         }
-      }
-      // 没有从cache的区域中取到播放链接，遍历漫游服务器
-      for (let area in serverList) {
-        const server = serverList[area] || ""
-        if (server.length === 0) continue;
-        api.setServer(server)
-        let playURL
-        if (area !== "th") {
-          playURL = await api.getPlayURLApp(req, accessKey || "", area)
-        } else {
-          playURL = await api.getPlayURLThailand(req)
-        }
-        // log.log(area, "已获取播放链接", playURL)
-        if (playURL.code !== 0) {
-          if (playURL.code === 401) {
-            log.log('获取播放链接失败：', playURL.message)
-            return
-          }
-          continue
-        }
-        // 解析成功
-        log.log('getPlayURL from', area, server)
-        AREA_MARK_CACHE[params.ep_id] = area
-        playURL = UTILS.fixPlayURL(playURL, area)
         log.log('playURL:', playURL)
         req.responseText = JSON.stringify(playURL)
-        break
       }
     } else if (resp.code == 0) {
       resp.result.dash.video.forEach(v => {
@@ -1050,8 +1076,8 @@ const URL_HOOK = {
     const zhHans = resp.data.subtitle?.subtitles?.find(e => e.lan === 'zh-Hans')
     if (!zhHans) {
       // 没有简体，查找繁体
-      const zhHant = resp.data.subtitle.subtitles.find(e => e.lan === 'zh-Hant')
-      if (!!zhHant) {
+      const zhHant = resp.data.subtitle?.subtitles.find(e => e.lan === 'zh-Hant')
+      if (zhHant) {
         // 有繁体，构造简体拦截器
         const zhHans = JSON.parse(JSON.stringify(zhHant))
         zhHans.lan = 'zh-Hans'
@@ -1075,18 +1101,23 @@ const URL_HOOK = {
   zhHansSubtitle: async (req) => {
     // log.log('繁体转简体', req)
     if (req._params.includes('zh-Hans')) {
-      // log.log('繁体字幕数据:', req.responseText)
-      const tc2sc = window?.ChineseConversionAPI?.tc2sc
-      if (!!tc2sc) {
-        req.responseText = tc2sc(req.responseText)
-        req.response = JSON.parse(req.responseText)
-        req.status = 200
-        // log.log('中文字幕数据: ', req.responseText)
+      try {
+        // log.log('繁体字幕数据:', req.responseText)
+        const tc2sc = window?.ChineseConversionAPI?.tc2sc
+        if (!!tc2sc) {
+          req.responseText = tc2sc(req.responseText)
+          req.response = JSON.parse(req.responseText)
+          req.status = 200
+          // log.log('中文字幕数据: ', req.responseText)
+        }
+      } catch (e) {
+        log.log('繁体转简体失败:', e)
       }
     }
   },
 
 }
+URL_HOOK["//api.bilibili.com/x/player/playurl"] = URL_HOOK["//api.bilibili.com/pgc/player/web/playurl"]
 const URL_HOOK_FETCH = {
   /**
    * 搜索
@@ -1165,17 +1196,22 @@ const URL_HOOK_FETCH = {
         const b2d = await db.getBvid2DynamicId(params.bvid)
         // 获取动态详情
         const bili = new BiliBiliApi();
-        const detail = await bili.getDynamicDetail(b2d.dynamic_id)
+        let detail = null
+        let res = null
+        if (b2d) {
+          detail = await bili.getDynamicDetail(b2d.dynamic_id)
+          res = await UTILS.genVideoDetailByDynamicDetail(detail.data)
+        }
+        // else
+        //   detail = await bili.getDynamicDetailByBvID(params.bvid)
         // 构造数据
-        const res = await UTILS.genVideoDetailByDynamicDetail(detail.data)
-        // log.log('res:', res)
         data.res.data = {
           code: 0,
           message: '',
           msg: '',
           data: res
         }
-        log.log('修復結果：', JSON.stringify(data.res))
+        log.log('修復結果:', JSON.stringify(data.res))
         return data.res
       }
       data.res = Response.json(resp)
@@ -1185,7 +1221,6 @@ const URL_HOOK_FETCH = {
     }
     return data.res
   },
-
 
 }
 
@@ -1426,6 +1461,15 @@ const XOR_CODE = 23442827791579n;
 const MAX_AID = 1n << 51n;
 const BASE = 58n;
 const data = 'FcwAPNKTMug3GV5Lj7EJnHpWsx4tb8haYeviqBz6rkCy12mUSDQX9RdoZf';
+const mixinKeyEncTab = [
+  46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49,
+  33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40,
+  61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11,
+  36, 20, 34, 44, 52
+]
+
+// 对 imgKey 和 subKey 进行字符顺序打乱编码
+const getMixinKey = (orig) => mixinKeyEncTab.map(n => orig[n]).join('').slice(0, 32)
 const UTILS = {
   getAccessToken() {
     const tokenInfo = JSON.parse(localStorage.bili_accessToken_hd || '{}')
@@ -1924,5 +1968,56 @@ const UTILS = {
       if (v.backupUrl) v.backupUrl = v.backup_url
     })
     return playURL
+  },
+  // 为请求参数进行 wbi 签名
+  encWbi(params, img_key, sub_key) {
+    const mixin_key = getMixinKey(img_key + sub_key)
+    const curr_time = Math.round(Date.now() / 1000)
+    const chr_filter = /[!'()*]/g
+
+    Object.assign(params, { wts: curr_time }) // 添加 wts 字段
+    // 按照 key 重排参数
+    const query = Object
+      .keys(params)
+      .sort()
+      .map(key => {
+        // 过滤 value 中的 "!'()*" 字符
+        const value = params[key].toString().replace(chr_filter, '')
+        return `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+      })
+      .join('&')
+
+    const wbi_sign = hex_md5(query + mixin_key) // 计算 w_rid
+
+    return query + '&w_rid=' + wbi_sign
+  },
+
+  // 获取最新的 img_key 和 sub_key
+  async getWbiKeys() {
+    const SESSDATA = await cookieStore.get('SESSDATA') || {}
+    const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
+      headers: {
+        // SESSDATA 字段
+        Cookie: `SESSDATA=${SESSDATA?.value}`
+      }
+    })
+    const { data: { wbi_img: { img_url, sub_url } } } = await res.json()
+
+    return {
+      img_key: img_url.slice(
+        img_url.lastIndexOf('/') + 1,
+        img_url.lastIndexOf('.')
+      ),
+      sub_key: sub_url.slice(
+        sub_url.lastIndexOf('/') + 1,
+        sub_url.lastIndexOf('.')
+      )
+    }
+  },
+  async genWbiparams(params) {
+    const web_keys = await this.getWbiKeys()
+    img_key = web_keys.img_key
+    sub_key = web_keys.sub_key
+    return this.encWbi(params, img_key, sub_key)
   }
 }
