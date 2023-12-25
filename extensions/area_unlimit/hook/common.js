@@ -1117,7 +1117,7 @@ const URL_HOOK = {
   },
 
 }
-URL_HOOK["//api.bilibili.com/x/player/playurl"] = URL_HOOK["//api.bilibili.com/pgc/player/web/playurl"]
+// URL_HOOK["//api.bilibili.com/x/player/playurl"] = URL_HOOK["//api.bilibili.com/pgc/player/web/playurl"]
 const URL_HOOK_FETCH = {
   /**
    * 搜索
