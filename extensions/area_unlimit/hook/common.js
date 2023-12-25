@@ -183,7 +183,6 @@ class BiliBiliApi {
       })
     }
     pList = pList.sort((a, b) => a.key > b.key ? 1 : -1)
-
     const str = pList.map(e => `${e.key}=${encodeURIComponent(e.value)}`).join('&')
     const sign = hex_md5(str + this.appSecret)
     return `${str}&sign=${sign}`
@@ -206,8 +205,7 @@ class BiliBiliApi {
     const resp = JSON.parse(_resp.responseText)
     if (resp.code === 0) {
       return resp
-    }
-    else {
+    } else {
       throw new Error(resp.code + ": " + resp.message)
     }
   }
@@ -241,8 +239,7 @@ class BiliBiliApi {
     log.log('confirmLogin', resp)
     if (resp.code === 0) {
       return resp
-    }
-    else {
+    } else {
       throw new Error(resp.code + ": " + resp.message)
     }
   }
@@ -266,8 +263,7 @@ class BiliBiliApi {
     const resp = JSON.parse(_resp.responseText)
     if (resp.code >= 0) {
       return resp
-    }
-    else {
+    } else {
       throw new Error(resp.code + ": " + resp.message)
     }
   }
@@ -288,6 +284,10 @@ class BiliBiliApi {
     const res = await HTTP.get('//api.bilibili.com/x/tag/detail?pn=0&ps=1&' + `tag_id=${tid}`)
     return res
   }
+  async getEpisodeInfoByEpId(ep_id) {
+    const res = await HTTP.get('//api.bilibili.com/pgc/season/episode/web/info?' + `ep_id=${ep_id}`)
+    return res
+  }
   async getUserStatusInfoById(season_id) {
     const param = {
       season_id: season_id,
@@ -298,7 +298,12 @@ class BiliBiliApi {
   }
 
   async getSeasonInfoByEpSsIdOnBangumi(ep_id, season_id) {
-    const res = await HTTP.get('//bangumi.bilibili.com/view/web_api/season?' + (ep_id != '' ? `ep_id=${ep_id}` : `season_id=${season_id}`))
+    let param = {
+      access_key: UTILS.getAccessToken()
+    }
+    if (ep_id !== '') param.ep_id = ep_id
+    if (season_id !== '') param.season_id = season_id
+    const res = await HTTP.get('//api.bilibili.com/pgc/view/v2/app/season?' + `${this.genSignParam(param)}`)
     return res
   }
 
@@ -387,7 +392,6 @@ class BiliBiliApi {
             resolve(UTILS.handleTHSearchResult(resp.data?.items || []))
           else {
             if (resp.data?.items) {
-
               resolve(UTILS.handleAppSearchResult(resp.data?.items || []))
             } else
               resolve(resp.data?.result || [])
@@ -664,80 +668,33 @@ const URL_HOOK = {
       if (response.status === 200) {
         seasonInfo = JSON.parse(response.responseText)
         if (seasonInfo.code === 0) {
-          seasonInfo.result.episodes.forEach(ep => {
-            ep.title = ep.title || `${ep.index}`
-            ep.id = ep.id || ep.ep_id
-            ep.status = ep.episode_status
-            ep.rights = { allow_download: 1, area_limit: 0 }
-            ep.long_title = ep.index_title
-          })
-          seasonInfo.result.new_ep = seasonInfo.result.newest_ep
-          seasonInfo.result.status = seasonInfo.result.status || 2
-          // 处理部分番剧存在平台限制
-          seasonInfo.result.rights.watch_platform = 0
-          seasonInfo.result.rights.allow_download = 1
-          seasonInfo.result.status = 13
-          seasonInfo.result.total = seasonInfo.result.total_ep
-          seasonInfo.result.type = 1
-
-          if (user_status) {
-            seasonInfo.result['user_status'] = {
-              area_limit: user_status.area_limit,
-              ban_area_show: user_status.ban_area_show, follow: user_status.follow,
-              follow_status: user_status.follow_status, login: user_status.login,
-              pay: user_status.pay, pay_pack_paid: user_status.pay_pack_paid,
-              sponsor: user_status.sponsor,
+          seasonInfo.result = seasonInfo.data
+          delete seasonInfo.data
+          seasonInfo.result.modules.forEach((module, mid) => {
+            if (module.data) {
+              let sid = module.id ? module.id : mid + 1
+              module.data['id'] = sid
             }
-          }
+          })
 
-          log.log('seasonInfo from 主站: ', seasonInfo)
-          req.responseText = JSON.stringify(seasonInfo)
-          return;
-        }
-      } else {
-        seasonInfo = { code: 0, message: 'success', result: {} }
-        if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
-        if (params.season_id) {
-          const season_id = parseInt(params.season_id)
-          let response = await api.getSeasonSectionBySsId(season_id)
-          if (response.status === 200) {
-            let selection = JSON.parse(response.responseText)
-            if (selection.code === 0) {
-              seasonInfo.result['episodes'] = selection.result.main_section.episodes
-              seasonInfo.result['positive'] = { id: selection.result.main_section.id, title: selection.result.main_section.title }
-              if (season_id) {
-                seasonInfo.result['season_id'] = season_id
-                seasonInfo.result['share_url'] = `https://www.bilibili.com/bangumi/play/ss${season_id}`
-              }
-              seasonInfo.result['show_season_type'] = 1
-              seasonInfo.result['type'] = 1
-              seasonInfo.result['total'] = seasonInfo.result.episodes.length
-              seasonInfo.result['status'] = 2
-              api.getTagsByAidOrBvId(seasonInfo.result.episodes[0].aid).then(res => {
-                if (res.status === 200) {
-                  let tag = JSON.parse(res.responseText)
-                  if (tag.code === 0) {
-                    log.log('getTagByAidOrBvId', tag.data)
-                    if (tag.data.length > 0) {
-                      tag.data.forEach(t => {
-                        if (t.tag_name.includes('僅限') || t.tag_name.includes('仅限')) {
-                          seasonInfo.result['season_title'] = t.tag_name
-                          seasonInfo.result['title'] = t.tag_name
-                          seasonInfo.result['series'] = { display_type: 0, series_title: t.tag_name }
-                          seasonInfo.result['seasons'] = { season_id: season_id, season_title: t.tag_name, season_type: 1 }
-                          // api.getTagDetailByTagId(t.tag_id).then(res => {
-                          //   if (res.status === 200) {
-                          //     let tagDetail = JSON.parse(res.responseText)
-                          //     if (tagDetail.code === 0) {
-                          //       log.log('getTagDetailByTagId', tagDetail.data)
-                          //     }
-                          //   }
-                          // })
-                        }
-                      })
+          if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
+          if (seasonInfo.result.season_id) {
+            const season_id = seasonInfo.result.season_id
+            let response = await api.getSeasonSectionBySsId(season_id)
+            if (response.status === 200) {
+              let selection = JSON.parse(response.responseText)
+              if (selection.code === 0) {
+                seasonInfo.result['episodes'] = selection.result.main_section.episodes
+                seasonInfo.result['section'] = selection.result.section
+                seasonInfo.result['positive'] = { id: selection.result.main_section.id, title: selection.result.main_section.title }
+                api.getEpisodeInfoByEpId(seasonInfo.result.episodes[0].id).then(res => {
+                  if (res.status === 200) {
+                    let info = JSON.parse(res.responseText)
+                    if (info.code === 0) {
+                      seasonInfo.result['up_info'] = info.data.related_up[0]
                     }
                   }
-                }
+                })
                 seasonInfo.result.episodes.forEach(ep => {
                   SEASON_EPID_CACHE[ep.id] = season_id
                   ep['bvid'] = UTILS.av2bv(ep.aid)
@@ -745,24 +702,29 @@ const URL_HOOK = {
                   ep['link'] = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
                   ep['rights'] = { allow_download: 1, area_limit: 0, allow_dm: 1 }
                   ep['short_link'] = `https://b23.tv/ep${ep.id}`
-                  ep['index_title'] = seasonInfo.result.title
                 })
-              })
-              api.getUserStatusInfoById(season_id).then(res => {
-                if (res.status === 200) {
-                  let user_status = JSON.parse(res.responseText)
-                  if (user_status.code === 0) {
-                    user_status.result.area_limit = 0
-                    user_status.result.ban_area_show = 0
-                    seasonInfo.result['user_status'] = user_status.result
-                  }
-                }
-              })
-              log.log('seasonInfo from 主站: ', seasonInfo)
-              req.responseText = JSON.stringify(seasonInfo)
-              return;
+                seasonInfo.result.section.forEach(section => {
+                  section.episodes.forEach(ep => {
+                    SEASON_EPID_CACHE[ep.id] = season_id
+                    ep['bvid'] = UTILS.av2bv(ep.aid)
+                    ep['ep_id'] = ep.id
+                    ep['link'] = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
+                    ep['rights'] = { allow_download: 1, area_limit: 0, allow_dm: 1 }
+                    ep['short_link'] = `https://b23.tv/ep${ep.id}`
+                  })
+                })
+              }
             }
           }
+
+          seasonInfo.result.status = seasonInfo.result.status || 2
+          // 处理部分番剧存在平台限制
+          seasonInfo.result.rights.watch_platform = 0
+          seasonInfo.result.rights.allow_download = 1
+
+          log.log('seasonInfo from 主站: ', seasonInfo)
+          req.responseText = JSON.stringify(seasonInfo)
+          return;
         }
       }
 
@@ -885,7 +847,7 @@ const URL_HOOK = {
         }
         if (playURL.code === 0) {
           // 从cache的区域中取到了播放链接
-          UTILS.fixPlayURL(playURL, area)
+          playURL = UTILS.fixPlayURL(playURL, area)
           log.log('playURL:', playURL)
           req.responseText = JSON.stringify(playURL)
           return;
@@ -916,7 +878,7 @@ const URL_HOOK = {
         // 解析成功
         log.log('getPlayURL from', area, server)
         AREA_MARK_CACHE[params.ep_id] = area
-        UTILS.fixPlayURL(playURL, area)
+        playURL = UTILS.fixPlayURL(playURL, area)
         log.log('playURL:', playURL)
         req.responseText = JSON.stringify(playURL)
         break
@@ -1961,5 +1923,6 @@ const UTILS = {
       if (v.baseUrl) v.baseUrl = v.base_url
       if (v.backupUrl) v.backupUrl = v.backup_url
     })
+    return playURL
   }
 }
