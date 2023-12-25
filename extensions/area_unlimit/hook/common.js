@@ -208,7 +208,7 @@ class BiliBiliApi {
       return resp
     }
     else {
-      throw new Error(resp.code, resp.message)
+      throw new Error(resp.code + ": " + resp.message)
     }
   }
 
@@ -226,18 +226,24 @@ class BiliBiliApi {
       build: 7082000,
       csrf: bili_jct?.value
     }
-    const DedeUserID = await cookieStore.get('DedeUserID') || {}
-    const SESSDATA = await cookieStore.get('SESSDATA') || {}
-    const _resp = await HTTP.post(url, this.genSignParam(param), {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      cookie: `DedeUserID=${DedeUserID?.value}; SESSDATA=${SESSDATA?.value}`
+    let pList = []
+    for (const k in param) {
+      pList.push({
+        key: k,
+        value: param[k]
+      })
+    }
+    const _param = pList.map(e => `${e.key}=${encodeURIComponent(e.value)}`).join('&')
+    const _resp = await HTTP.post(url, _param, {
+      'Content-Type': 'application/x-www-form-urlencoded'
     })
     const resp = JSON.parse(_resp.responseText)
+    log.log('confirmLogin', resp)
     if (resp.code === 0) {
       return resp
     }
     else {
-      throw new Error(resp.code, resp.message)
+      throw new Error(resp.code + ": " + resp.message)
     }
   }
 
@@ -262,7 +268,7 @@ class BiliBiliApi {
       return resp
     }
     else {
-      throw new Error(resp.code, resp.message)
+      throw new Error(resp.code + ": " + resp.message)
     }
   }
 
@@ -297,7 +303,10 @@ class BiliBiliApi {
   }
 
   async getSeasonInfoByEpSsIdOnThailand(ep_id, season_id) {
-    const params = '?' + (ep_id !== '' ? `ep_id=${ep_id}` : `season_id=${season_id}`) + `&mobi_app=bstar_a&s_locale=zh_SG`;
+    let params = '?'
+    if (ep_id !== '') params += `ep_id=${ep_id}&`
+    if (season_id !== '') params += `season_id=${season_id}&`
+    params += `mobi_app=bstar_a&s_locale=zh_SG`;
     const newParams = UTILS.generateThMobiPlayUrlParams(params);
     const res = await HTTP.get(`//${this.server}/intl/gateway/v2/ogv/view/app/season?` + newParams)
     return JSON.parse(res.responseText || "{}")
@@ -348,13 +357,12 @@ class BiliBiliApi {
     const res = await HTTP.get(`${url}?${queryParam}`)
     return JSON.parse(res.responseText || "{}")
   }
-  async getPlayURLThailand(req, ak, area) {
+  async getPlayURLThailand(req) {
     const params = `?${req._params}&mobi_app=bstar_a&s_locale=zh_SG`;
     const newParams = UTILS.generateThMobiPlayUrlParams(params);
     const res = await HTTP.get(`//${this.server}/intl/gateway/v2/ogv/playurl?${newParams}`)
     // 参考：哔哩漫游 油猴插件
     let result = JSON.parse(res.responseText || "{}")
-    if (result.code !== 0) throw new Error(result.code, result.message)
     return UTILS.fixThailandPlayUrlJson(result)
   }
 
@@ -403,7 +411,7 @@ class BiliBiliApi {
     if (resp.code === 0) {
       return resp
     }
-    throw new Error(resp.code, resp.message)
+    throw new Error(resp.code + ": " + resp.message)
   }
 
   /**
@@ -418,7 +426,7 @@ class BiliBiliApi {
     if (resp.code === 0) {
       return resp
     }
-    throw new Error(resp.code, resp.message)
+    throw new Error(resp.code + ": " + resp.message)
   }
 }
 
@@ -656,7 +664,6 @@ const URL_HOOK = {
       if (response.status === 200) {
         seasonInfo = JSON.parse(response.responseText)
         if (seasonInfo.code === 0) {
-          // title id
           seasonInfo.result.episodes.forEach(ep => {
             ep.title = ep.title || `${ep.index}`
             ep.id = ep.id || ep.ep_id
@@ -690,64 +697,71 @@ const URL_HOOK = {
       } else {
         seasonInfo = { code: 0, message: 'success', result: {} }
         if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
-        let response = await api.getSeasonSectionBySsId(params.season_id)
-        if (response.status === 200) {
-          let selection = JSON.parse(response.responseText)
-          if (selection.code === 0) {
-            seasonInfo.result['episodes'] = selection.result.main_section.episodes
-            if (params.season_id) {
-              seasonInfo.result['season_id'] = params.season_id
-              seasonInfo.result['share_url'] = `https://www.bilibili.com/bangumi/play/ss${params.season_id}`
+        if (params.season_id) {
+          const season_id = parseInt(params.season_id)
+          let response = await api.getSeasonSectionBySsId(season_id)
+          if (response.status === 200) {
+            let selection = JSON.parse(response.responseText)
+            if (selection.code === 0) {
+              seasonInfo.result['episodes'] = selection.result.main_section.episodes
+              seasonInfo.result['positive'] = { id: selection.result.main_section.id, title: selection.result.main_section.title }
+              if (season_id) {
+                seasonInfo.result['season_id'] = season_id
+                seasonInfo.result['share_url'] = `https://www.bilibili.com/bangumi/play/ss${season_id}`
+              }
               seasonInfo.result['show_season_type'] = 1
               seasonInfo.result['type'] = 1
-            }
-            api.getTagsByAidOrBvId(seasonInfo.result.episodes[0].aid).then(res => {
-              if (res.status === 200) {
-                let tag = JSON.parse(res.responseText)
-                if (tag.code === 0) {
-                  log.log('getTagByAidOrBvId', tag.data)
-                  if (tag.data.length > 0) {
-                    tag.data.forEach(t => {
-                      if (t.tag_name.includes('僅限') || t.tag_name.includes('仅限')) {
-                        seasonInfo.result['season_title'] = t.tag_name
-                        seasonInfo.result['title'] = t.tag_name
-                        seasonInfo.result['series'] = { display_type: 0, series_title: t.tag_name }
-                        seasonInfo.result['seasons'] = { season_id: params.season_id, season_title: t.tag_name, season_type: 1 }
-                        api.getTagDetailByTagId(t.tag_id).then(res => {
-                          if (res.status === 200) {
-                            let tagDetail = JSON.parse(res.responseText)
-                            if (tagDetail.code === 0) {
-                              log.log('getTagDetailByTagId', tagDetail.data)
-                            }
-                          }
-                        })
-                      }
-                    })
+              seasonInfo.result['total'] = seasonInfo.result.episodes.length
+              seasonInfo.result['status'] = 2
+              api.getTagsByAidOrBvId(seasonInfo.result.episodes[0].aid).then(res => {
+                if (res.status === 200) {
+                  let tag = JSON.parse(res.responseText)
+                  if (tag.code === 0) {
+                    log.log('getTagByAidOrBvId', tag.data)
+                    if (tag.data.length > 0) {
+                      tag.data.forEach(t => {
+                        if (t.tag_name.includes('僅限') || t.tag_name.includes('仅限')) {
+                          seasonInfo.result['season_title'] = t.tag_name
+                          seasonInfo.result['title'] = t.tag_name
+                          seasonInfo.result['series'] = { display_type: 0, series_title: t.tag_name }
+                          seasonInfo.result['seasons'] = { season_id: season_id, season_title: t.tag_name, season_type: 1 }
+                          // api.getTagDetailByTagId(t.tag_id).then(res => {
+                          //   if (res.status === 200) {
+                          //     let tagDetail = JSON.parse(res.responseText)
+                          //     if (tagDetail.code === 0) {
+                          //       log.log('getTagDetailByTagId', tagDetail.data)
+                          //     }
+                          //   }
+                          // })
+                        }
+                      })
+                    }
                   }
                 }
-              }
-              seasonInfo.result.episodes.forEach(ep => {
-                SEASON_EPID_CACHE[ep.id] = params.season_id
-                ep['ep_id'] = ep.id
-                ep['link'] = `https://www.bilibili.com/bangumi/play/ep${ep.id})}`
-                ep['rights'] = { allow_download: 1, area_limit: 0, allow_dm: 1 }
-                ep['short_link'] = `https://b23.tv/ep${ep.id}`
-                ep['index_title'] = seasonInfo.result.title
+                seasonInfo.result.episodes.forEach(ep => {
+                  SEASON_EPID_CACHE[ep.id] = season_id
+                  ep['bvid'] = UTILS.av2bv(ep.aid)
+                  ep['ep_id'] = ep.id
+                  ep['link'] = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
+                  ep['rights'] = { allow_download: 1, area_limit: 0, allow_dm: 1 }
+                  ep['short_link'] = `https://b23.tv/ep${ep.id}`
+                  ep['index_title'] = seasonInfo.result.title
+                })
               })
-            })
-            api.getUserStatusInfoById(params.season_id).then(res => {
-              if (res.status === 200) {
-                let user_status = JSON.parse(res.responseText)
-                if (user_status.code === 0) {
-                  user_status.result.area_limit = 0
-                  user_status.result.ban_area_show = 0
-                  seasonInfo.result['user_status'] = user_status.result
+              api.getUserStatusInfoById(season_id).then(res => {
+                if (res.status === 200) {
+                  let user_status = JSON.parse(res.responseText)
+                  if (user_status.code === 0) {
+                    user_status.result.area_limit = 0
+                    user_status.result.ban_area_show = 0
+                    seasonInfo.result['user_status'] = user_status.result
+                  }
                 }
-              }
-            })
-            log.log('seasonInfo from 主站: ', seasonInfo)
-            req.responseText = JSON.stringify(seasonInfo)
-            return;
+              })
+              log.log('seasonInfo from 主站: ', seasonInfo)
+              req.responseText = JSON.stringify(seasonInfo)
+              return;
+            }
           }
         }
       }
@@ -755,6 +769,7 @@ const URL_HOOK = {
       let server = serverList['th'] || ""
       if (server.length === 0) return;
       api.setServer(server)
+      if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
       log.log('去th找 seasonInfo: params:', params)
       seasonInfo = await api.getSeasonInfoByEpSsIdOnThailand(params.ep_id || "", params.season_id || "")
       if (seasonInfo.code !== 0 || seasonInfo.result.modules.length === 0) {
@@ -763,7 +778,6 @@ const URL_HOOK = {
         return;
       }
 
-      AREA_MARK_CACHE[params.ep_id] = 'th'
       let episodes = []
       if (user_status) {
         seasonInfo.result['user_status'] = {
@@ -786,6 +800,7 @@ const URL_HOOK = {
             ep.status = 2
             ep['episode_status'] = ep.status
             ep['ep_id'] = ep.id
+            SEASON_EPID_CACHE[ep.id] = seasonInfo.result.season_id
             ep.index = ep.title
             ep.link = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
             ep.indexTitle = ep.long_title_display
@@ -818,6 +833,7 @@ const URL_HOOK = {
       seasonInfo.result['season_status'] = seasonInfo.result.status
       seasonInfo.result['season_title'] = seasonInfo.result.title
       seasonInfo.result['total_ep'] = episodes.length
+      AREA_MARK_CACHE[params.ep_id] = 'th'
       log.log('seasonInfo from th: ', seasonInfo)
       req.responseText = JSON.stringify(seasonInfo)
     } else {
@@ -856,35 +872,20 @@ const URL_HOOK = {
       log.warn('[player]: 播放链接获取出现问题:', resp.message)
       const params = UTILS._params2obj(req._params)
       const serverList = JSON.parse(localStorage.serverList || "{}")
-      const upos = localStorage.upos || ""
-      const isReplaceAkamai = localStorage.replaceAkamai === "true"
       const accessKey = UTILS.getAccessToken()
       const api = new BiliBiliApi()
-      if (serverList[AREA_MARK_CACHE[params.ep_id]] && serverList[AREA_MARK_CACHE[params.ep_id]].length > 0) {
-        api.setServer(serverList[AREA_MARK_CACHE[params.ep_id]])
+      let area = serverList[AREA_MARK_CACHE[params.ep_id]]
+      if (serverList[area] && serverList[area].length > 0) {
+        api.setServer(serverList[area])
         let playURL;
-        if (AREA_MARK_CACHE[params.ep_id] !== "th")
-          playURL = await api.getPlayURLApp(req, accessKey || "", AREA_MARK_CACHE[params.ep_id])
+        if (area !== "th")
+          playURL = await api.getPlayURLApp(req, accessKey || "", area)
         else {
-          playURL = await api.getPlayURLThailand(req, accessKey || "", AREA_MARK_CACHE[params.ep_id])
+          playURL = await api.getPlayURLThailand(req)
         }
         if (playURL.code === 0) {
-          const playURLNew = { code: playURL.code, message: "success", result: playURL }
-          playURL = playURLNew
           // 从cache的区域中取到了播放链接
-          playURL = UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, AREA_MARK_CACHE[params.ep_id])
-          playURL.result.dash.video.forEach(v => {
-            v.base_url = UTILS.disableReferer(v.base_url)
-            if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
-            if (v.baseUrl) v.baseUrl = v.base_url
-            if (v.backupUrl) v.backupUrl = v.backup_url
-          })
-          playURL.result.dash.audio.forEach(v => {
-            v.base_url = UTILS.disableReferer(v.base_url)
-            if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
-            if (v.baseUrl) v.baseUrl = v.base_url
-            if (v.backupUrl) v.backupUrl = v.backup_url
-          })
+          UTILS.fixPlayURL(playURL, area)
           log.log('playURL:', playURL)
           req.responseText = JSON.stringify(playURL)
           return;
@@ -902,9 +903,9 @@ const URL_HOOK = {
         if (area !== "th") {
           playURL = await api.getPlayURLApp(req, accessKey || "", area)
         } else {
-          playURL = await api.getPlayURLThailand(req, accessKey || "", area)
+          playURL = await api.getPlayURLThailand(req)
         }
-        // log.log("已获取播放链接", playURL)
+        // log.log(area, "已获取播放链接", playURL)
         if (playURL.code !== 0) {
           if (playURL.code === 401) {
             log.log('获取播放链接失败：', playURL.message)
@@ -912,24 +913,10 @@ const URL_HOOK = {
           }
           continue
         }
-        log.log('getPlayURL from', area, server)
-        const playURLNew = { code: playURL.code, message: "success", result: playURL }
-        playURL = playURLNew
         // 解析成功
+        log.log('getPlayURL from', area, server)
         AREA_MARK_CACHE[params.ep_id] = area
-        playURL = UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, area)
-        playURL.result.dash.video.forEach(v => {
-          v.base_url = UTILS.disableReferer(v.base_url)
-          if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
-          if (v.baseUrl) v.baseUrl = v.base_url
-          if (v.backupUrl) v.backupUrl = v.backup_url
-        })
-        playURL.result.dash.audio.forEach(v => {
-          v.base_url = UTILS.disableReferer(v.base_url)
-          if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
-          if (v.baseUrl) v.baseUrl = v.base_url
-          if (v.backupUrl) v.backupUrl = v.backup_url
-        })
+        UTILS.fixPlayURL(playURL, area)
         log.log('playURL:', playURL)
         req.responseText = JSON.stringify(playURL)
         break
@@ -1071,10 +1058,11 @@ const URL_HOOK = {
       const api = new BiliBiliApi(serverList.th);
       const subtitles = await api.getSubtitleOnThailand(req._params);
       if (resp.code === 0) {
-        resp.data.subtitle.subtitles.push(...subtitles)
-      } else if (subtitles.length > 1) {
+        if (subtitles.length > 1) {
+          resp.data.subtitle.subtitles.push(...subtitles)
+        }
+      } else {
         const id = await cookieStore.get('DedeUserID') || {}
-        log.log('DedeUserID:', id)
         resp.code = 0
         resp.message = "0"
         resp.data = {
@@ -1083,13 +1071,10 @@ const URL_HOOK = {
           vip: {
             type: 2,
             status: 1
-          },
-          subtitle: {
-            allow_submit: false,
-            lan: "",
-            lan_doc: "",
-            subtitles
           }
+        }
+        if (subtitles.length > 1) {
+          resp.data['subtitle'] = { allow_submit: false, lan: "", lan_doc: "", subtitles }
         }
       }
     }
@@ -1116,7 +1101,7 @@ const URL_HOOK = {
         resp.data.subtitle.subtitles.push(zhHans)
       }
     }
-    // log.log('result:', resp)
+    // log.log('处理字幕和登录信息 result:', resp)
     req.responseText = JSON.stringify(resp)
   },
 
@@ -1475,7 +1460,10 @@ function __awaiter(thisArg, _arguments, P, generator) {
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 }
-
+const XOR_CODE = 23442827791579n;
+const MAX_AID = 1n << 51n;
+const BASE = 58n;
+const data = 'FcwAPNKTMug3GV5Lj7EJnHpWsx4tb8haYeviqBz6rkCy12mUSDQX9RdoZf';
 const UTILS = {
   getAccessToken() {
     const tokenInfo = JSON.parse(localStorage.bili_accessToken_hd || '{}')
@@ -1495,7 +1483,7 @@ const UTILS = {
     }
   },
   replaceUpos(playURL, host, replaceAkamai = false, area = "") {
-    log.log('replaceUpos:', host, 'replaceAkamai:', replaceAkamai)
+    // log.log('replaceUpos:', host, 'replaceAkamai:', replaceAkamai)
     if (host) {
       playURL.result.dash.video.forEach(v => {
         if (!v.base_url.includes("akamaized.net") || replaceAkamai || area === "th") {
@@ -1615,8 +1603,7 @@ const UTILS = {
       }
     }
     // 准备明文
-    let plaintext = '';
-    plaintext = mobi_api_params.slice(0, -1) + `acd495b248ec528c2eed1e862d393126`;
+    let plaintext = mobi_api_params.slice(0, -1) + `acd495b248ec528c2eed1e862d393126`
     // 生成 sign
     let ciphertext = hex_md5(plaintext);
     return `${mobi_api_params}sign=${ciphertext}`;
@@ -1689,7 +1676,8 @@ const UTILS = {
               window.__segment_base_map__ = {};
               window.__segment_base_map__[id] = result;
             }
-            log.log('get SegmentBase', result, 'id', id);
+            if (indexRangeStart < 0 || indexRagneEnd < indexRangeStart)
+              log.log('get SegmentBase Error', result, 'id', id);
             resolve(result);
           };
           xhr.send(null); // 发送请求
@@ -1743,6 +1731,7 @@ const UTILS = {
   fixThailandPlayUrlJson(originJson) {
     return __awaiter(this, void 0, void 0, function* () {
       let origin = JSON.parse(JSON.stringify(originJson));
+      if (origin.code !== 0) return origin;
       let video_info = origin.data.video_info;
       let stream_list = video_info.stream_list;
       let dash_audio = video_info.dash_audio;
@@ -1776,7 +1765,7 @@ const UTILS = {
         const search = audio.backup_url ? new URL(audio.backup_url[0]).search : url.search
         if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(url.hostname)) {
           audio.base_url = new URL(url.pathname.replace(/\/v1\/resource\//g, '').replace(/\_/g, `\/`) + search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
-          log.log('replace ip upos', base_url, 'to host', audio.base_url)
+          // log.log('replace ip upos', base_url, 'to host', audio.base_url)
         } else if (url.hostname.includes("akamaized.net")) {
           audio.base_url = new URL(url.pathname + search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
         }
@@ -1786,7 +1775,7 @@ const UTILS = {
             u = new URL(url.pathname + url.search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
           }
         })
-        log.log('填充音频流数据:', audio)
+        // log.log('填充音频流数据:', audio)
         dash['audio'].push(audio);
       });
 
@@ -1806,7 +1795,7 @@ const UTILS = {
           const search = stream.dash_video.backup_url ? new URL(stream.dash_video.backup_url[0]).search : url.search
           if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(url.hostname)) {
             stream.dash_video.base_url = new URL(url.pathname.replace(/\/v1\/resource\//g, '').replace(/\_/g, `\/`) + search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
-            log.log('replace ip upos', base_url, 'to host', stream.dash_video.base_url)
+            // log.log('replace ip upos', base_url, 'to host', stream.dash_video.base_url)
           } else if (url.hostname.includes("akamaized.net")) {
             stream.dash_video.base_url = new URL(url.pathname + search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
           }
@@ -1816,7 +1805,7 @@ const UTILS = {
               u = new URL(url.pathname + url.search, `https://${uposMap[localStorage.upos || "ks3"]}`).href
             }
           })
-          log.log('填充视频流数据:', stream.dash_video)
+          // log.log('填充视频流数据:', stream.dash_video)
           dash_video.push(stream.dash_video);
         }
       });
@@ -1863,10 +1852,9 @@ const UTILS = {
     return parent.hex_md5(plaintext)
   },
   genSearchParam(params, area) {
-    const result = {
+    let result = {
       access_key: params.access_key,
       appkey: area === 'th' ? '7d089525d3611b1c' : '27eb53fc9058f8c3',
-      build: area === 'th' ? '1001310' : null,
       c_locale: area === 'th' ? 'zh_SG' : 'zh_CN',
       channel: 'yingyongbao',
       device: 'android',
@@ -1877,7 +1865,6 @@ const UTILS = {
       highlight: 1,
       keyword: params.keyword,
       lang: 'hans',
-      mobi_app: area === 'th' ? 'bstar_a' : null,
       platform: 'android',
       pn: 1,
       ps: 20,
@@ -1890,7 +1877,11 @@ const UTILS = {
       type: 7,
       area: area
     }
-    result.sign = UTILS.genSearchSign(result, area)
+    if (area === 'th') {
+      result['build'] = '1001310'
+      result['mobi_app'] = 'bstar_a'
+    }
+    result['sign'] = UTILS.genSearchSign(result, area)
     let a = ''
     for (const k in result) {
       a += `${k}=${result[k]}&`
@@ -1938,5 +1929,37 @@ const UTILS = {
     const resp = await new BiliBiliApi().getUserCard(card.owner.mid)
     res.Card = resp.data
     return res
+  },
+
+  av2bv(aid) {
+    const bytes = ['B', 'V', '1', '0', '0', '0', '0', '0', '0', '0', '0', '0'];
+    let bvIndex = bytes.length - 1;
+    let tmp = (MAX_AID | BigInt(aid)) ^ XOR_CODE;
+    while (tmp > 0) {
+      bytes[bvIndex] = data[Number(tmp % BigInt(BASE))];
+      tmp = tmp / BASE;
+      bvIndex -= 1;
+    }
+    [bytes[3], bytes[9]] = [bytes[9], bytes[3]];
+    [bytes[4], bytes[7]] = [bytes[7], bytes[4]];
+    return bytes.join('');
+  },
+  fixPlayURL(playURL, area) {
+    const upos = localStorage.upos || ""
+    const isReplaceAkamai = localStorage.replaceAkamai === "true"
+    playURL = { code: playURL.code, message: "success", result: playURL }
+    playURL = UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, area)
+    playURL.result.dash.video.forEach(v => {
+      v.base_url = UTILS.disableReferer(v.base_url)
+      if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+      if (v.baseUrl) v.baseUrl = v.base_url
+      if (v.backupUrl) v.backupUrl = v.backup_url
+    })
+    playURL.result.dash.audio.forEach(v => {
+      v.base_url = UTILS.disableReferer(v.base_url)
+      if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+      if (v.baseUrl) v.baseUrl = v.base_url
+      if (v.backupUrl) v.backupUrl = v.backup_url
+    })
   }
 }
