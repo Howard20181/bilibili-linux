@@ -751,75 +751,78 @@ const URL_HOOK = {
       }
 
       let server = serverList['th'] || ""
-      if (server.length === 0) return;
-      api.setServer(server)
-      if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
-      log.log('去th找 seasonInfo: params:', params)
-      seasonInfo = await api.getSeasonInfoByEpSsIdOnThailand(params.ep_id || "", params.season_id || "")
-      if (seasonInfo.code !== 0 || seasonInfo.result.modules.length === 0) {
-        if (seasonInfo.code === 401)
-          log.log('获取番剧信息失败：', seasonInfo.message)
-        return;
-      }
-
-      let episodes = []
-      if (user_status) {
-        seasonInfo.result['user_status'] = {
-          area_limit: user_status.area_limit,
-          follow: user_status.follow,
-          login: user_status.login,
-          pay: seasonInfo.result.user_status.vip,
-          vip_info: user_status.vip_info
+      if (server.length !== 0) {
+        api.setServer(server)
+        if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
+        log.log('去th找 seasonInfo: params:', params)
+        seasonInfo = await api.getSeasonInfoByEpSsIdOnThailand(params.ep_id || "", params.season_id || "")
+        if (seasonInfo.code !== 0 || seasonInfo.result.modules.length === 0) {
+          if (seasonInfo.code === 401) {
+            log.log('获取番剧信息失败：', seasonInfo.message)
+            localStorage.removeItem('bili_accessToken_hd')
+          }
         }
-      }
-      seasonInfo.result.user_status.follow = 1
-      seasonInfo.result.modules.forEach((module, mid) => {
-        if (module.data) {
-          let sid = module.id ? module.id : mid + 1
-          module.data.episodes.forEach((ep, eid) => {
-            if (ep.status === 13) {
-              ep['badge'] = '会员'
-              ep['badge_info'] = { bg_color: '#FB7299', bg_color_night: '#BB5B76', text: '会员' }
+        if (seasonInfo.code === 0) {
+          let episodes = []
+          if (user_status) {
+            seasonInfo.result['user_status'] = {
+              area_limit: user_status.area_limit,
+              follow: user_status.follow,
+              login: user_status.login,
+              pay: seasonInfo.result.user_status.vip,
+              vip_info: user_status.vip_info
             }
-            ep.status = 2
-            ep['episode_status'] = ep.status
-            ep['ep_id'] = ep.id
-            SEASON_EPID_CACHE[ep.id] = seasonInfo.result.season_id
-            ep.index = ep.title
-            ep.link = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
-            ep.indexTitle = ep.long_title_display
-            ep.index_title = ep.long_title_display
-            ep.long_title = ep.long_title_display
-            ep['ep_index'] = eid + 1
-            ep['selection_index'] = sid + 1
-            ep['rights'] = { allow_demand: 0, allow_dm: 0, allow_download: 0, area_limit: 0 }
-            ep['skip'] = ep.jump
-            if (!ep.cid || ep.cid === 0) ep['cid'] = ep.id
-            if (!ep.aid || ep.aid === 0) ep['aid'] = seasonInfo.result.season_id
-            episodes.push(ep)
+          }
+          seasonInfo.result.user_status.follow = 1
+          seasonInfo.result.modules.forEach((module, mid) => {
+            if (module.data) {
+              let sid = module.id ? module.id : mid + 1
+              module.data.episodes.forEach((ep, eid) => {
+                if (ep.status === 13) {
+                  ep['badge'] = '会员'
+                  ep['badge_info'] = { bg_color: '#FB7299', bg_color_night: '#BB5B76', text: '会员' }
+                }
+                ep.status = 2
+                ep['episode_status'] = ep.status
+                ep['ep_id'] = ep.id
+                SEASON_EPID_CACHE[ep.id] = seasonInfo.result.season_id
+                ep.index = ep.title
+                ep.link = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
+                ep.indexTitle = ep.long_title_display
+                ep.index_title = ep.long_title_display
+                ep.long_title = ep.long_title_display
+                ep['ep_index'] = eid + 1
+                ep['selection_index'] = sid + 1
+                ep['rights'] = { allow_demand: 0, allow_dm: 0, allow_download: 0, area_limit: 0 }
+                ep['skip'] = ep.jump
+                if (!ep.cid || ep.cid === 0) ep['cid'] = ep.id
+                if (!ep.aid || ep.aid === 0) ep['aid'] = seasonInfo.result.season_id
+                episodes.push(ep)
+              })
+              module.data['id'] = sid
+            }
           })
-          module.data['id'] = sid
+          seasonInfo.result['episodes'] = episodes
+          let style = []
+          seasonInfo.result.styles.forEach(i => {
+            style.push(i.name)
+          })
+          seasonInfo.result['style'] = style
+          seasonInfo.result.rights['watch_platform'] = 0
+          seasonInfo.result.rights['allow_comment'] = 0
+          seasonInfo.result.actors = seasonInfo.result.actor.info
+          seasonInfo.result['is_paster_ads'] = 0
+          seasonInfo.result['jp_title'] = seasonInfo.result.origin_name
+          seasonInfo.result['newest_ep'] = seasonInfo.result.new_ep
+          seasonInfo.result.status = 2
+          seasonInfo.result['season_status'] = seasonInfo.result.status
+          seasonInfo.result['season_title'] = seasonInfo.result.title
+          seasonInfo.result['total_ep'] = episodes.length
+          AREA_MARK_CACHE[params.ep_id] = 'th'
+          log.log('seasonInfo from th: ', seasonInfo)
+          req.responseText = JSON.stringify(seasonInfo)
         }
-      })
-      seasonInfo.result['episodes'] = episodes
-      let style = []
-      seasonInfo.result.styles.forEach(i => {
-        style.push(i.name)
-      })
-      seasonInfo.result['style'] = style
-      seasonInfo.result.rights['watch_platform'] = 0
-      seasonInfo.result.rights['allow_comment'] = 0
-      seasonInfo.result.actors = seasonInfo.result.actor.info
-      seasonInfo.result['is_paster_ads'] = 0
-      seasonInfo.result['jp_title'] = seasonInfo.result.origin_name
-      seasonInfo.result['newest_ep'] = seasonInfo.result.new_ep
-      seasonInfo.result.status = 2
-      seasonInfo.result['season_status'] = seasonInfo.result.status
-      seasonInfo.result['season_title'] = seasonInfo.result.title
-      seasonInfo.result['total_ep'] = episodes.length
-      AREA_MARK_CACHE[params.ep_id] = 'th'
-      log.log('seasonInfo from th: ', seasonInfo)
-      req.responseText = JSON.stringify(seasonInfo)
+      }
     } else {
       // 一些番剧可以获取到信息，但是内部有限制区域
       resp.result.episodes.forEach(ep => {
@@ -873,6 +876,7 @@ const URL_HOOK = {
             // log.log(area, "已从缓存地区获取播放链接", playURL)
             if (playURL.code === 401) {
               log.log('获取播放链接失败：', playURL.message)
+              localStorage.removeItem('bili_accessToken_hd')
             }
           }
         }
@@ -895,6 +899,7 @@ const URL_HOOK = {
             if (playURL.code !== 0) {
               if (playURL.code === 401) {
                 log.log('获取播放链接失败：', playURL.message)
+                localStorage.removeItem('bili_accessToken_hd')
                 break
               }
               continue

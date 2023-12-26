@@ -284,7 +284,6 @@ window.log = window.log || {
           this.serverList[area] = serverList[area]
         }
         this.hdLogin.tokenInfo = JSON.parse(localStorage.getItem('bili_accessToken_hd') || '{}')
-
       },
       computed: {
         tokenInfo: function () {
@@ -299,8 +298,7 @@ window.log = window.log || {
             if (expiredAt.getTime() < Date.now()) {
               ret.msg = `token已过期`
               ret.expired = true
-            }
-            else {
+            } else {
               ret.expired = false
               ret.msg = `过期时间：${expiredAt.toLocaleString()}`
             }
