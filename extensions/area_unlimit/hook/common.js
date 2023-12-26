@@ -905,9 +905,8 @@ const URL_HOOK = {
           // log.log('getPlayURL from', area, serverList[area])
           AREA_MARK_CACHE[params.ep_id] = area
           playURL = UTILS.fixPlayURL(playURL, area)
+          req.responseText = JSON.stringify(playURL)
         }
-        log.log('playURL:', playURL)
-        req.responseText = JSON.stringify(playURL)
       }
     } else if (resp.code == 0) {
       resp.result.dash.video.forEach(v => {
