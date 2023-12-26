@@ -2022,15 +2022,24 @@ const UTILS = {
 
   // 获取最新的 img_key 和 sub_key
   async getWbiKeys() {
-    const SESSDATA = await cookieStore.get('SESSDATA') || {}
-    const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
-      headers: {
-        // SESSDATA 字段
-        Cookie: `SESSDATA=${SESSDATA?.value}`
-      }
-    })
-    const { data: { wbi_img: { img_url, sub_url } } } = await res.json()
-
+    let img_url, sub_url, wbi_img
+    const wbi_img_urls = localStorage.wbi_img_urls
+    if (wbi_img_urls) {
+      wbi_img = wbi_img_urls.split('-')
+      img_url = wbi_img[0]
+      sub_url = wbi_img[1]
+    } else {
+      const SESSDATA = await cookieStore.get('SESSDATA') || {}
+      const res = await fetch('https://api.bilibili.com/x/web-interface/nav', {
+        headers: {
+          Cookie: `SESSDATA=${SESSDATA?.value}`
+        }
+      })
+      const json = await res.json()
+      wbi_img = json.data.wbi_img
+      img_url = wbi_img.img_url
+      sub_url = wbi_img.sub_url
+    }
     return {
       img_key: img_url.slice(
         img_url.lastIndexOf('/') + 1,
