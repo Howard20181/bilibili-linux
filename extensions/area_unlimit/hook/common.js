@@ -944,7 +944,7 @@ const URL_HOOK = {
    * @param {XMLHttpRequest} req 原请求结果
    * @returns {Promise<void>}
    */
-  "//api.bilibili.com/x/polymer/web-dynamic/v1/feed/all": async (req) => {
+  "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all": async (req) => {
     const resp = JSON.parse(req.responseText)
     if (resp.code === 0) {
       try {
@@ -962,7 +962,6 @@ const URL_HOOK = {
       } catch (e) {
         console.error('动态信息1:', e)
       }
-
     }
   },
 
@@ -1225,7 +1224,32 @@ const URL_HOOK_FETCH = {
     }
     return data.res
   },
-
+  /**
+   * 动态信息3
+   * @param {XMLHttpRequest} data 原请求结果
+   * @returns {Promise<void>}
+   */
+  "//api.bilibili.com/x/polymer/web-dynamic/desktop/v1/feed/space": async (data) => {
+    const resp = await data.res.clone().json()
+    if (resp.code === 0) {
+      try {
+        const db = new DB()
+        await db.open();
+        const { items } = resp.data
+        for (const item of items) {
+          if (item.modules[0].module_author.user.mid === 11783021) {
+            await db.putBvid2DynamicId({
+              bvid: item.modules[1].module_dynamic.dyn_archive.bvid,
+              dynamic_id: item.id_str
+            })
+          }
+        }
+      } catch (e) {
+        console.error('动态信息3:', e)
+      }
+    }
+    return data.res
+  }
 }
 
 let HOSTS_NO_REFER_MAP = []
