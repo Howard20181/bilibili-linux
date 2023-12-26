@@ -430,9 +430,7 @@ class BiliBiliApi {
  */
   async getDynamicDetailByBvID(bvid) {
     const params = { bvid: bvid }
-    const _params = await UTILS.genWbiparams(params)
-    const url = `https://api.bilibili.com/x/web-interface/wbi/view/detail?${_params}`
-    const res = await HTTP.get(url)
+    const res = await HTTP.get(`https://api.bilibili.com/x/web-interface/wbi/view/detail?${await UTILS.genWbiparams(params)}`)
     const resp = JSON.parse(res.responseText)
     if (resp.code === 0) {
       return resp
@@ -702,6 +700,13 @@ const URL_HOOK = {
           if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
           if (seasonInfo.result.season_id) {
             const season_id = seasonInfo.result.season_id
+            let seasons = []
+            seasonInfo.result.modules.forEach(module => {
+              module.data.seasons.forEach(season => {
+                seasons.push(season)
+              })
+            })
+            seasonInfo.result['seasons'] = seasons
             let response = await api.getSeasonSectionBySsId(season_id)
             if (response.status === 200) {
               let selection = JSON.parse(response.responseText)
