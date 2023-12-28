@@ -312,6 +312,10 @@ class BiliBiliApi {
     const res = await HTTP.get('//api.bilibili.com/pgc/view/v2/app/season?' + `${this.genSignParam(param)}`)
     return res
   }
+  async getMediaInfoBySeasonId(season_id) {
+    const res = await HTTP.get(`//bangumi.bilibili.com/anime/${season_id}`)
+    return res
+  }
 
   async getSeasonInfoByEpSsIdOnThailand(ep_id, season_id) {
     let params = '?'
@@ -706,7 +710,16 @@ const URL_HOOK = {
                 seasons.push(season)
               })
             })
-            seasonInfo.result['seasons'] = seasons
+            if (seasons.length > 0)
+              seasonInfo.result['seasons'] = seasons
+            else {
+              let response = await api.getMediaInfoBySeasonId(params.season_id)
+              if (response.status === 200) {
+                let mediaInfo = JSON.parse(response.responseText.match(/window\.__INITIAL_STATE__=(.*);\(function\(\)/)[1]).mediaInfo
+                // log.log('mediaInfo', mediaInfo)
+                seasonInfo.result['seasons'] = mediaInfo.seasons
+              }
+            }
             let response = await api.getSeasonSectionBySsId(season_id)
             if (response.status === 200) {
               let selection = JSON.parse(response.responseText)
@@ -1219,7 +1232,7 @@ const URL_HOOK_FETCH = {
           msg: '',
           data: res
         }
-        log.log('修復結果:', JSON.stringify(data.res))
+        // log.log('修復結果:', JSON.stringify(data.res))
         return data.res
       }
       data.res = Response.json(resp)
