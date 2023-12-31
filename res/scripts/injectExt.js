@@ -3,7 +3,6 @@ const https = require('https');
 const HttpGet = (url, headers = {}) => {
   return new Promise((resolve, reject) => {
     const u = new URL(url)
-    // console.log(u)
     const options = {
       hostname: u.hostname,
       port: u.port,
@@ -13,7 +12,6 @@ const HttpGet = (url, headers = {}) => {
     };
     const result = []
     const req = https.request(options, res => {
-      // console.log(`statusCode: ${res.statusCode}`);
       res.on('end', () => {
         resolve(Buffer.concat(result).toString())
       })
@@ -22,7 +20,6 @@ const HttpGet = (url, headers = {}) => {
       });
     });
     req.on('error', error => {
-      // console.error(error);
       reject(error)
     });
 
@@ -70,10 +67,8 @@ const ModuleLoadHook = {
   },
 }
 const original_load = Module._load;
-// console.log('Module:', Module)
 Module._load = (...args) => {
   const loaded_module = original_load(...args);
-  // console.log('load', args[0])
   if (ModuleLoadHook[args[0]]) {
     return ModuleLoadHook[args[0]](loaded_module)
   }
@@ -106,7 +101,7 @@ BrowserWindow.prototype.loadURL = function () {
     // 设置PAC代理脚本
     this.webContents.on('ipc-message-sync', (event, ...args) => {
       if (args[0] === "config/roamingPAC") {
-        console.log("receive config/roamingPAC: ", ...args)
+        console.log("receive config/roamingPAC:", ...args)
         const ses = this.webContents.session
         ses.setProxy({
           mode: 'pac_script',
@@ -115,7 +110,7 @@ BrowserWindow.prototype.loadURL = function () {
           console.log("====set proxy")
           ses.forceReloadProxyConfig().then(() => {
             ses.resolveProxy("akamai.net").then(res => {
-              console.log("resolveProxy akamai.net --> ", res)
+              console.log("resolveProxy akamai.net -->", res)
               event.returnValue = res.length === 0 ? 'error' : 'ok'
               if (res.length === 0)
                 ses.setProxy({ mode: 'system' })
@@ -147,20 +142,15 @@ BrowserWindow.prototype.loadFile = function (...args) {
   this.webContents.session.loadExtension(extPath + "/area_unlimit", {
     allowFileAccess: true,
   }).then(({ id }) => {
-    // ...
     console.log('-----Load Extension:', id)
   }).catch((e) => {
 
   })
   _loadFile.apply(this, args)
-  // this.loadURL('http://www.jysafe.cn')
 }
 app.on('ready', () => {
-  // const path = require('path');
-  // const extPath = path.join(path.dirname(app.getAppPath()), "extensions");
   // 自定义协议的具体实现
   protocol.registerStringProtocol('roaming', (req, cb) => {
-    // console.log('registerHttpProtocol', req)
     HttpGet(req.url.replace('roaming', 'https'), {
       cookie: req.headers['x-cookie']
     }).then(res => {

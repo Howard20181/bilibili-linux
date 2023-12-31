@@ -6,7 +6,7 @@ const getData = (name) => {
       // e.detail contains the transferred data (can be anything, ranging
       // from JavaScript objects to strings).
       // Do something, for example:
-      console.log('player ROAMING_sendURL: ', e.detail);
+      console.log('player ROAMING_sendURL:', e.detail);
       document.removeEventListener('ROAMING_sendURL', this)
       if (e.detail)
         resolve(e.detail)
@@ -40,7 +40,6 @@ if (wvList && wvList.length > 0) {
       const commonJSUrl = await getData('commonJS')
       console.log('commonJSUrl:', commonJSUrl)
       const commonJS = await HTTP.get(commonJSUrl)
-      // console.log('js:', commonJS.responseText)
       wv.executeJavaScript(commonJS.responseText)
     })()
   })
