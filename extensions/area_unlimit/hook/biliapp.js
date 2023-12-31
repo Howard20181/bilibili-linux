@@ -89,7 +89,7 @@ window.log = window.log || {
     let vue = createVueJS()
     loadStatus.textContent = "[1/2]加载vue"
     vue.onerror = (e) => {
-      console.error('vue加载失败', e)
+      log.error('vue加载失败', e)
       const reload = targetWindow.document.createElement('button')
       reload.textContent = "重载vue"
       reload.className = "vui_button about-button mr_sm"

@@ -3,7 +3,7 @@ let result = ""
 if(pacLink.length > 0)
   result = biliBridgePc.callNativeSync('config/roamingPAC', pacLink);
 if(result === 'error')localStorage.pacLink = ""
-console.log("[hook]: player");
+log.info("[hook]: player.js");
 
 const sleep = (ms) => {
   return new Promise((resolve, reject) => {
@@ -28,12 +28,12 @@ const sleep = (ms) => {
   const BilibiliAPI = {
     getEpDetails: (seasonId, epId)=>{
       const api = new BiliBiliApi()
-      return api.getSeasonInfoByEpSsIdOnBangumi(epId || "", seasonId || "")
+      return api.getSeasonSectionBySsId(seasonId || "")
       .then(seasonInfo=>{
-        console.log('seasonInfo: ', seasonInfo)
+        log.log('seasonInfo:', seasonInfo)
         if(seasonInfo.code !==0)return Promise.reject(seasonInfo)
 
-        const ep = seasonInfo.result.episodes.filter(ep=>ep.ep_id===parseInt(epId))
+        const ep = seasonInfo.result.main_section.episodes.filter(ep=>ep.ep_id===parseInt(epId))
         if(ep.length === 0)return Promise.reject("剧集查找失败, target:", epId)
         return Promise.resolve(ep[0])
       })
@@ -53,10 +53,10 @@ const sleep = (ms) => {
       const url = `https://api.bilibili.com/x/web-interface/search/type?__refresh__=true&_extra=&context=&page=1&page_size=12&order=&duration=&from_source=&from_spmid=333.337&platform=pc&device=win&highlight=1&single_column=0&keyword=${str}&search_type=media_bangumi`
       return HTTP.get(url).then(res=>{
         const resp = JSON.parse(res.responseText)
-        console.log('bilibili: ', resp)
+        log.log('bilibili:', resp)
         const bangumiList = []
         const result = resp.data?.result ?? []
-        console.log('result: ', result)
+        log.log('result:', result)
         for(let bangumi of result){
           let children = []
           if(!bangumi.eps)continue;
@@ -81,10 +81,10 @@ const sleep = (ms) => {
       const url = `https://api.dandanplay.net/api/v2/search/episodes?anime=${str}`
       return HTTP.get(url).then(res=>{
         const resp = JSON.parse(res.responseText)
-        console.log('dandanplay: ', resp)
+        log.log('dandanplay:', resp)
         const bangumiList = []
         const result = resp?.animes ?? []
-        console.log('dandanplay result: ', result)
+        log.log('dandanplay result:', result)
         for(let anime of result){
           let children = []
           for(let ep of anime.episodes){
@@ -105,9 +105,9 @@ const sleep = (ms) => {
   }
   const HandleResult = {
     bilibili: async (options)=>{
-      console.log('bilibili options: ', options)
+      log.log('bilibili options:', options)
       const epDetails = await BilibiliAPI.getEpDetails(...options)
-      console.log('getEpDetails: ', epDetails)
+      log.log('getEpDetails:', epDetails)
 
       // 弹幕池操作
       danmakuManage.rootStore.configStore.reload.cid = epDetails.cid
@@ -120,9 +120,9 @@ const sleep = (ms) => {
       return Promise.resolve("操作成功")
     },
     dandanplay: async (options, data)=>{
-      console.log('dandanplay options: ', options)
+      log.log('dandanplay options:', options)
       const comments = await DandanAPI.getComment(options[1], data.dandanplayWithRelated || true)
-      console.log('getComment: ', comments)
+      log.log('getComment:', comments)
       const result = []
       const nowTime = new Date().getTime()/1000
       for(let comment of comments){
@@ -175,7 +175,7 @@ const sleep = (ms) => {
   }
   const UI = (()=>{
     const init = ()=>{
-      console.log("init")
+      log.log("init")
       const appContainer = document.querySelector("#app > div > div.app_player--header.flex_between.draggable.db_click_max")
       const page = document.createElement('div')
       page.className = "msojocs-player-settings"
@@ -243,7 +243,7 @@ const sleep = (ms) => {
         // e.detail contains the transferred data (can be anything, ranging
         // from JavaScript objects to strings).
         // Do something, for example:
-        console.log('player ROAMING_sendURL: ', e.detail);
+        log.log('player ROAMING_sendURL:', e.detail);
         if(e.detail.includes("PlayerEnhance")){
           const roamingHTML = await HTTP.get(e.detail)
           const container = document.createElement('div')
@@ -268,7 +268,7 @@ const sleep = (ms) => {
       }
     }
     const loadPage = ()=>{
-      console.log("Vue Start")
+      log.log("Vue Start")
       const App = {
         data() {
           return {
@@ -284,7 +284,7 @@ const sleep = (ms) => {
           };
         },
         created() {
-          console.log('vue created')
+          log.log('vue created')
           document.getElementById("player-ext-settings").onclick = ()=>{
             this.settingsVisible = !this.settingsVisible
           }
@@ -302,7 +302,7 @@ const sleep = (ms) => {
             })
           },
           doConfirm: function(){
-            console.log('selectOptions', this.selectOptions)
+            log.log('selectOptions', this.selectOptions)
             let data = {}
             switch (this.activeName) {
               case "dandanplay":
@@ -320,7 +320,7 @@ const sleep = (ms) => {
                 type: 'success'
               })
             }).catch(err=>{
-              console.error('出现错误:', err)
+              log.error('出现错误:', err)
               this.$message({
                 message: "出现错误",
                 type: 'error'
@@ -337,7 +337,7 @@ const sleep = (ms) => {
            */
           dmTimelineMove: function(time){
             this.moveFactor += time
-            console.log('dmTimelineMove: ', time, this.moveFactor)
+            log.log('dmTimelineMove:', time, this.moveFactor)
             const list = danmakuManage.danmaku.manager.dataBase.timeLine.list
             list.forEach(dm => {
               dm.stime += time
@@ -360,13 +360,13 @@ const sleep = (ms) => {
   })()
 
   window.onload = async ()=>{
-    console.log("====onload====")
+    log.log("====onload====")
     let headerLeft = null
 
     for (let i = 0; true; i++) {
       headerLeft = document.querySelector("#app > div > div.app_player--header.flex_between.draggable.db_click_max > div.app_player--header-left")
       if (headerLeft !== null) break
-      console.error('头部元素未找到！', i)
+      log.error('头部元素未找到！', i)
       await sleep(1000)
       if (i > 20) {
         return
@@ -398,7 +398,7 @@ const sleep = (ms) => {
   }
   // 1.75倍速
   let rate175check = setInterval(()=>{
-    // console.log('1.75倍速')
+    // log.log('1.75倍速')
     try{
       const speedRate = window.danmakuManage.nodes.controlBottomRight.querySelector('.cpx-player-ctrl-playbackrate-menu > li:nth-child(1)')
       const rate175 = document.createElement('li')
@@ -408,7 +408,7 @@ const sleep = (ms) => {
       speedRate.after(rate175)
       clearInterval(rate175check)
     }catch(err){
-      // console.error('添加1.75倍速失败：', err)
+      // log.error('添加1.75倍速失败：', err)
     }
   }, 1000)
 })()

@@ -303,7 +303,7 @@ class BiliBiliApi {
     return res
   }
 
-  async getSeasonInfoByEpSsIdOnBangumi(ep_id, season_id) {
+  async getSeasonInfoByEpSsId(ep_id, season_id) {
     let param = {
       access_key: UTILS.getAccessToken()
     }
@@ -387,7 +387,7 @@ class BiliBiliApi {
       try {
         params.access_key = UTILS.getAccessToken()
       } catch (e) {
-        console.error('获取access token异常：', e)
+        log.error('获取access token异常：', e)
       }
       if (area === 'th') {
         path = "intl/gateway/v2/app/search/type"
@@ -668,7 +668,6 @@ const uposMap = {
 };
 const AREA_MARK_CACHE = {}
 let SEASON_STATUS_CACHE = {}
-let SEASON_EPID_CACHE = {}
 // HOOK
 const URL_HOOK = {
 
@@ -687,8 +686,7 @@ const URL_HOOK = {
       let seasonInfo = null;
       const params = UTILS._params2obj(req._params)
       log.log('getSeason', params, resp)
-      const user_status = SEASON_STATUS_CACHE[params.season_id]
-      let response = await api.getSeasonInfoByEpSsIdOnBangumi(params.ep_id || "", params.season_id || "")
+      let response = await api.getSeasonInfoByEpSsId(params.ep_id || "", params.season_id || "")
       if (response.status === 200) {
         seasonInfo = JSON.parse(response.responseText)
         if (seasonInfo.code === 0) {
@@ -701,7 +699,6 @@ const URL_HOOK = {
             }
           })
 
-          if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
           if (seasonInfo.result.season_id) {
             const season_id = seasonInfo.result.season_id
             let seasons = []
@@ -713,7 +710,7 @@ const URL_HOOK = {
             if (seasons.length > 0)
               seasonInfo.result['seasons'] = seasons
             else {
-              let response = await api.getMediaInfoBySeasonId(params.season_id)
+              let response = await api.getMediaInfoBySeasonId(season_id)
               if (response.status === 200) {
                 let mediaInfo = JSON.parse(response.responseText.match(/window\.__INITIAL_STATE__=(.*);\(function\(\)/)[1]).mediaInfo
                 // log.log('mediaInfo', mediaInfo)
@@ -736,7 +733,6 @@ const URL_HOOK = {
                   }
                 })
                 seasonInfo.result.episodes.forEach(ep => {
-                  SEASON_EPID_CACHE[ep.id] = season_id
                   ep['bvid'] = UTILS.av2bv(ep.aid)
                   ep['ep_id'] = ep.id
                   ep['link'] = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
@@ -745,7 +741,6 @@ const URL_HOOK = {
                 })
                 seasonInfo.result.section.forEach(section => {
                   section.episodes.forEach(ep => {
-                    SEASON_EPID_CACHE[ep.id] = season_id
                     ep['bvid'] = UTILS.av2bv(ep.aid)
                     ep['ep_id'] = ep.id
                     ep['link'] = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
@@ -771,7 +766,6 @@ const URL_HOOK = {
       let server = serverList['th'] || ""
       if (server.length !== 0) {
         api.setServer(server)
-        if (!params.season_id && params.ep_id) { params.season_id = SEASON_EPID_CACHE[params.ep_id] }
         log.log('去th找 seasonInfo: params:', params)
         seasonInfo = await api.getSeasonInfoByEpSsIdOnThailand(params.ep_id || "", params.season_id || "")
         if (seasonInfo.code !== 0 || seasonInfo.result.modules.length === 0) {
@@ -781,7 +775,9 @@ const URL_HOOK = {
           }
         }
         if (seasonInfo.code === 0) {
+          const season_id = seasonInfo.result.season_id
           let episodes = []
+          const user_status = SEASON_STATUS_CACHE[season_id]
           if (user_status) {
             seasonInfo.result['user_status'] = {
               area_limit: user_status.area_limit,
@@ -803,7 +799,6 @@ const URL_HOOK = {
                 ep.status = 2
                 ep['episode_status'] = ep.status
                 ep['ep_id'] = ep.id
-                SEASON_EPID_CACHE[ep.id] = seasonInfo.result.season_id
                 ep.index = ep.title
                 ep.link = `https://www.bilibili.com/bangumi/play/ep${ep.id}`
                 ep.indexTitle = ep.long_title_display
@@ -978,7 +973,7 @@ const URL_HOOK = {
           }
         }
       } catch (e) {
-        console.error('动态信息1:', e)
+        log.error('动态信息1:', e)
       }
     }
   },
@@ -1004,7 +999,7 @@ const URL_HOOK = {
           }
         }
       } catch (e) {
-        console.error('动态信息2:', e)
+        log.error('动态信息2:', e)
       }
 
     }
@@ -1046,7 +1041,7 @@ const URL_HOOK = {
           req.responseText = JSON.stringify(searchResult)
         } catch (err) {
 
-          console.error('搜索异常:', err)
+          log.error('搜索异常:', err)
         }
       }
     }
@@ -1176,7 +1171,7 @@ const URL_HOOK_FETCH = {
           data.res.data = searchResult
         } catch (err) {
 
-          console.error('搜索异常:', err)
+          log.error('搜索异常:', err)
         }
       }
     }
@@ -1196,7 +1191,7 @@ const URL_HOOK_FETCH = {
         if (userInfo) data.res = Response.json(userInfo)
       }
     } catch (e) {
-      console.error('用户信息替换失败：', e)
+      log.error('用户信息替换失败：', e)
     }
     return data.res
   },
@@ -1238,7 +1233,7 @@ const URL_HOOK_FETCH = {
       data.res = Response.json(resp)
       // debugger
     } catch (e) {
-      console.error('視頻信息修復失败：', e)
+      log.error('視頻信息修復失败：', e)
     }
     return data.res
   },
@@ -1263,7 +1258,7 @@ const URL_HOOK_FETCH = {
           }
         }
       } catch (e) {
-        console.error('动态信息3:', e)
+        log.error('动态信息3:', e)
       }
     }
     return data.res
@@ -1344,21 +1339,10 @@ window.getHookXMLHttpRequest = (win) => {
         try {
           if (super.responseType === 'arraybuffer') {
             const response = super.response;
-            const url = this._url;
-            const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
-            if (this.readyState === 2 /* HEADERS_RECEIVED */) {
-              if (HOSTS_NO_REFER_MAP.includes(host)) {
-                // log.log('onreadystatechange [HEADERS_RECEIVED]: should disableReferer:', host, 'url:', url, response.headers)
-                response.headers['access-control-allow-headers'] = '*'
-                response.headers['access-control-allow-origin'] = '*'
-                response.headers['access-control-expose-headers'] = '*'
-                response.headers['Access-Control-Allow-Credentials'] = 'true'
-              }
-            }
             this.response = response
           }
         } catch (e) {
-          console.error('响应体处理异常：', e)
+          log.error('响应体处理异常：', e)
         }
         try {
           if (this._onreadystatechange) {
@@ -1452,7 +1436,7 @@ if (fetch.toString().includes('[native code]')) {
           res
         })
       } catch (e) {
-        console.error(e)
+        log.error(e)
       }
     }
     return res
