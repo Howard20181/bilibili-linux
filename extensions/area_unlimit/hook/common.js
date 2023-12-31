@@ -992,10 +992,16 @@ const URL_HOOK = {
         const { items } = resp.data
         for (const item of items) {
           if (item.modules[0].module_author.user.mid === 11783021) {
-            await db.putBvid2DynamicId({
-              bvid: item.modules[1].module_dynamic.dyn_archive.bvid,
-              dynamic_id: item.id_str
-            })
+            for (i in item.modules) {
+              const module = item.modules[i]
+              if (module.module_type === "MODULE_TYPE_DYNAMIC") {
+                await db.putBvid2DynamicId({
+                  bvid: module.module_dynamic.dyn_archive.bvid,
+                  dynamic_id: item.id_str
+                })
+                break
+              }
+            }
           }
         }
       } catch (e) {
@@ -1251,10 +1257,16 @@ const URL_HOOK_FETCH = {
         const { items } = resp.data
         for (const item of items) {
           if (item.modules[0].module_author.user.mid === 11783021) {
-            await db.putBvid2DynamicId({
-              bvid: item.modules[1].module_dynamic.dyn_archive.bvid,
-              dynamic_id: item.id_str
-            })
+            for (i in item.modules) {
+              const module = item.modules[i]
+              if (module.module_type === "MODULE_TYPE_DYNAMIC") {
+                await db.putBvid2DynamicId({
+                  bvid: module.module_dynamic.dyn_archive.bvid,
+                  dynamic_id: item.id_str
+                })
+                break
+              }
+            }
           }
         }
       } catch (e) {
