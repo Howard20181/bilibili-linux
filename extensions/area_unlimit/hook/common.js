@@ -217,7 +217,6 @@ class BiliBiliApi {
  * @constructor
  */
   async confirmLogin(authCode) {
-    const url = 'https://passport.bilibili.com/x/passport-tv-login/h5/qrcode/confirm'
     const bili_jct = await cookieStore.get('bili_jct') || {}
     const param = {
       auth_code: authCode,
@@ -231,18 +230,18 @@ class BiliBiliApi {
         value: param[k]
       })
     }
+    pList.sort()
     const _param = pList.map(e => `${e.key}=${encodeURIComponent(e.value)}`).join('&')
     const DedeUserID = await cookieStore.get('DedeUserID') || {}
     const SESSDATA = await cookieStore.get('SESSDATA') || {}
-    const _resp = await fetch(url, {
-      method: "POST", body: _param, headers: {
-        "User-Agent": navigator.userAgent,
+    const resp = await (await fetch(('https://passport.bilibili.com/x/passport-tv-login/h5/qrcode/confirm?' + _param), {
+      method: 'POST',
+      referrer: 'https://bilipc.bilibili.com/login',
+      headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        cookie: `DedeUserID=${DedeUserID?.value}; SESSDATA=${SESSDATA?.value}`
+        'cookie': `DedeUserID=${DedeUserID.value};SESSDATA=${SESSDATA.value};`
       }
-    })
-    const resp = await _resp.json()
-    log.log('confirmLogin', resp)
+    })).json()
     if (resp.code === 0) {
       return resp
     } else {
@@ -354,18 +353,9 @@ class BiliBiliApi {
     }
     const url = `https://${this.server}/pgc/player/api/playurl`
     const param = {
+      ...p,
       access_key: ak,
       area: area,
-      build: 1442100,
-      cid: p.cid,
-      device: 'android',
-      ep_id: p.ep_id,
-      fnval: p.fnval,
-      fnver: p.fnver,
-      force_host: 0,
-      fourk: p.fourk,
-      platform: 'android',
-      qn: p.qn,
       ts: (Date.now() / 1000).toFixed(0),
     }
     const queryParam = this.genSignParam(param)
@@ -1317,14 +1307,14 @@ window.getHookXMLHttpRequest = (win) => {
       };
       super.onreadystatechange = () => {
         if (this.readyState === 1 /* OPENED */) {
-          referrerEle.content = "strict-origin-when-cross-origin"
           const url = this._url;
           const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
           if (HOSTS_NO_REFER_MAP.includes(host)) {
             referrerEle.content = "no-referrer"
+          } else {
+            referrerEle.content = "strict-origin-when-cross-origin"
           }
         }
-        log.log(...arguments)
         if (this.readyState === 4 /* DONE */ && this.status === 200) {
           // log.log('onreadystatechange', this, super.responseType)
           switch (super.responseType) {
@@ -1433,11 +1423,11 @@ window.getHookXMLHttpRequest = (win) => {
 const originalFetch = window.fetch
 if (fetch.toString().includes('[native code]')) {
   window.fetch = async (url, config) => {
-    // log.log('fetch:', url, config)
+    const host = new URL(url.startsWith('//') ? `https:${url}` : url).hostname
+    if (HOSTS_NO_REFER_MAP.includes(host)) {
+      config.referrerPolicy = "no-referrer"
+    }
     const res = await originalFetch(url, config)
-    // const u = new URL(url.startsWith('//') ? `https:${url}` : url)
-    // log.log('u.pathname:', u.pathname)
-    // log.log('res:', res)
     const [path, params] = url.split(/\?/);
     if (URL_HOOK_FETCH[path]) {
       // debugger
@@ -1527,23 +1517,38 @@ const UTILS = {
     if (url) {
       const host = new URL(url).hostname
       if (!HOSTS_NO_REFER_MAP.includes(host)) HOSTS_NO_REFER_MAP.push(host)
+      referrerEle.content = "no-referrer"
       return url
     }
   },
   replaceUpos(playURL, host, replaceAkamai = false, area = "") {
     // log.log('replaceUpos:', host, 'replaceAkamai:', replaceAkamai)
     if (host) {
-      playURL.result.dash.video.forEach(v => {
+      playURL.result.dash?.video.forEach(v => {
         if (!v.base_url.includes("akamaized.net") || replaceAkamai || area === "th") {
           const url = new URL(v.base_url)
           v.base_url = new URL(url.pathname + url.search, `https://${host}`).href
         }
       })
-      playURL.result.dash.audio.forEach(v => {
+      playURL.result.dash?.audio.forEach(v => {
         if (!v.base_url.includes("akamaized.net") || replaceAkamai || area === "th") {
           const url = new URL(v.base_url)
           v.base_url = new URL(url.pathname + url.search, `https://${host}`).href
         }
+      })
+      playURL.result.durl?.forEach(v => {
+        if (!v.url.includes("akamaized.net") || replaceAkamai || area === "th") {
+          const url = new URL(v.url)
+          v.url = new URL(url.pathname + url.search, `https://${host}`).href
+        }
+      })
+      playURL.result.durls?.forEach(item => {
+        item.durl.forEach(v => {
+          if (!v.url.includes("akamaized.net") || replaceAkamai || area === "th") {
+            const url = new URL(v.url)
+            v.url = new URL(url.pathname + url.search, `https://${host}`).href
+          }
+        })
       })
     }
     return playURL
@@ -1997,17 +2002,27 @@ const UTILS = {
     const isReplaceAkamai = localStorage.replaceAkamai === "true"
     playURL = { code: playURL.code, message: "success", result: playURL }
     playURL = UTILS.replaceUpos(playURL, uposMap[upos], isReplaceAkamai, area)
-    playURL.result.dash.video.forEach(v => {
+    playURL.result.dash?.video.forEach(v => {
       v.base_url = UTILS.disableReferer(v.base_url)
       if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
       if (v.baseUrl) v.baseUrl = v.base_url
       if (v.backupUrl) v.backupUrl = v.backup_url
     })
-    playURL.result.dash.audio.forEach(v => {
+    playURL.result.dash?.audio.forEach(v => {
       v.base_url = UTILS.disableReferer(v.base_url)
       if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
       if (v.baseUrl) v.baseUrl = v.base_url
       if (v.backupUrl) v.backupUrl = v.backup_url
+    })
+    playURL.result.durl?.forEach(v => {
+      if (v.url) UTILS.disableReferer(v.url)
+      if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+    })
+    playURL.result.durls?.forEach(item => {
+      item.durl.forEach(v => {
+        if (v.url) UTILS.disableReferer(v.url)
+        if (v.backup_url) v.backup_url.forEach((b, i) => { v.backup_url[i] = UTILS.disableReferer(b) })
+      })
     })
     return playURL
   },
