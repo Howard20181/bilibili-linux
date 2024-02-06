@@ -21,7 +21,7 @@
       "extensions",
       "app/app-update.yml"
     ],
-    "electronVersion": "27.1.3",
+    "electronVersion": "27.3.1",
     "appId": "com.bilibili.app",
     "mac": {
       "target": [
@@ -74,7 +74,7 @@
   },
   "homepage": "https://github.com/Howard20181/bilibili-multiplatform#readme",
   "devDependencies": {
-    "electron": "^27.1.3",
+    "electron": "^27.3.1",
     "electron-builder": "^24.9.1"
   }
 }
