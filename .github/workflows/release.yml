@@ -21,11 +21,11 @@ jobs:
         ARCH: ["x86_64"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: "recursive"
       - name: Setup Node.js environment
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 16
 
@@ -71,12 +71,12 @@ jobs:
           tar -zcf tmp/build/extensions-${{ steps.tag.outputs.tag }}.tar.gz extensions
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bilibili-${{ matrix.ARCH }}.src
           path: tmp/src
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bilibili-${{ matrix.ARCH }}.build
           path: tmp/build
@@ -92,9 +92,9 @@ jobs:
         ARCH: ["x86_64"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Prepare
         run: |
@@ -128,9 +128,58 @@ jobs:
           rm -rf tmp/build/linux-unpacked
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: bilibili-${{ matrix.ARCH }}.build
+          name: bilibili-linux-${{ matrix.ARCH }}.build
+          path: tmp/build
+  build-mac:
+    name: Build Mac
+    needs:
+      - build-src
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        ARCH: ["x86_64"]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Prepare
+        run: |
+          npm install electron/asar -g
+          npm ci
+
+      - name: Generate TAG
+        id: Tag
+        run: |
+          tag='continuous'
+          name='Continuous Build'
+          if [ 'true' == ${{ startsWith(github.ref, 'refs/tags/') }} ];then
+            tag='${{ github.ref_name }}'
+            name='${{ github.ref_name }}'
+          fi
+          echo "tag result: $tag - $name"
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "name=$name" >> $GITHUB_OUTPUT
+
+      - name: Build
+        env:
+          BUILD_VERSION: ${{ steps.tag.outputs.tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p tmp/build
+          tools/build-prepare.sh
+          asar e app/app.asar app/app
+          npm run pkg-mac
+          ls -l tmp/build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bilibili-macos-${{ matrix.ARCH }}.build
           path: tmp/build
 
   build-win:
@@ -144,9 +193,9 @@ jobs:
         ARCH: ["x86_64"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Prepare
         run: |
@@ -178,9 +227,9 @@ jobs:
           npm run pkg-win
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: bilibili-${{ matrix.ARCH }}.build
+          name: bilibili-windows-${{ matrix.ARCH }}.build
           path: "tmp/build/bilibili Setup**.exe"
 
   build-deepin:
@@ -194,9 +243,9 @@ jobs:
         ARCH: ["x86_64", "ARM64"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
 
       - name: Prepare
         run: |
@@ -236,9 +285,9 @@ jobs:
           tools/build-deepin.sh ${{ steps.tag.outputs.tag }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: bilibili-${{ matrix.ARCH }}.build
+          name: bilibili-deepin-${{ matrix.ARCH }}.build
           path: tmp/build
 
   upload:
@@ -248,10 +297,11 @@ jobs:
       - build-linux
       - build-win
       - build-deepin
+      - build-mac
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
       - name: Inspect directory after downloading artifacts
         run: ls -alFR
 
@@ -276,6 +326,7 @@ jobs:
           sudo apt install -y fuse
           wget -q https://github.com/TheAssassin/pyuploadtool/releases/download/continuous/pyuploadtool-x86_64.AppImage
           chmod +x pyuploadtool-x86_64.AppImage
+          ls -l **build/*
           ./pyuploadtool-x86_64.AppImage \
           **src/*.tar.gz \
           **build/*.tar.gz \
